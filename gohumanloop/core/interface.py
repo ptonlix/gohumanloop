@@ -1,428 +1,291 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Protocol, runtime_checkable, List, Union, Callable, Awaitable
 from enum import Enum
+from dataclasses import dataclass, field
+from datetime import datetime
 
-class ApprovalStatus(Enum):
-    """枚举批准状态"""
+class HumanLoopStatus(Enum):
+    """枚举人机循环状态"""
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
     EXPIRED = "expired"
     ERROR = "error"
+    COMPLETED = "completed"  # 用于非审批类交互完成
+    INPROGRESS = "inprogress"  # 用于多轮对话的中间状态，表示对话正在进行中
+    CANCELLED = "cancelled"  # 用于取消请求
 
-# 添加交互类型枚举
-class InteractionType(Enum):
-    """枚举人机交互类型"""
+class HumanLoopType(Enum):
+    """枚举人机循环类型"""
     APPROVAL = "approval"  # 审批类型
     INFORMATION = "information"  # 信息获取类型
     CONVERSATION = "conversation"  # 对话类型
 
-class ApprovalRequest:
-    """批准请求的数据模型"""
-    def __init__(
-        self,
-        task_id: str,
-        context: Dict[str, Any],
-        metadata: Optional[Dict[str, Any]] = None,
-        request_id: Optional[str] = None,
-        timeout: Optional[int] = None,
-    ):
-        self.task_id = task_id
-        self.context = context
-        self.metadata = metadata or {}
-        self.request_id = request_id
-        self.timeout = timeout
-        self.created_at = None  # 将在请求创建时设置
+"""
+## task_id conversation_id request_id 三者之间的关系
+1. 层次关系 ：
+   
+   - task_id 位于最高层，代表业务任务
+   - conversation_id 位于中间层，代表一次完整的对话会话
+   - request_id 位于最低层，代表单次交互请求
+2. 映射关系 ：
+   
+   - 一个 task_id 可能对应多个 conversation_id （一个任务可能需要多次对话）
+   - 一个 conversation_id 可能对应多个 request_id （一次对话可能包含多轮交互）
+"""
+@dataclass
+class HumanLoopRequest:
+    """人机循环请求的数据模型 / Human loop request data model"""
+    task_id: str  # 任务ID / Task identifier
+    conversation_id: str# 用于关联多轮对话 / Used to associate multi-turn conversations
+    loop_type: HumanLoopType  # 循环类型 / Loop type
+    context: Dict[str, Any]  # 交互上下文信息 / Interaction context information
+    metadata: Dict[str, Any] = field(default_factory=dict)  # 元数据信息 / Metadata information
+    request_id: Optional[str] = None  # 请求ID / Request identifier
+    timeout: Optional[int] = None  # 超时时间（秒） / Timeout duration (seconds)
+    created_at: Optional[datetime] = None  # 将在请求创建时设置 / Will be set when request is created
 
-class ApprovalResult:
-    """批准结果的数据模型"""
-    def __init__(
-        self,
-        request_id: str,
-        status: ApprovalStatus,
-        feedback: Optional[Dict[str, Any]] = None,
-        approved_by: Optional[str] = None,
-        approved_at: Optional[str] = None,
-        error: Optional[str] = None,
-    ):
-        self.request_id = request_id
-        self.status = status
-        self.feedback = feedback or {}
-        self.approved_by = approved_by
-        self.approved_at = approved_at
-        self.error = error
-
-# 添加人机交互请求模型
-class HumanInteractionRequest:
-    """人机交互请求的数据模型"""
-    def __init__(
-        self,
-        task_id: str,
-        interaction_type: InteractionType,
-        context: Dict[str, Any],
-        metadata: Optional[Dict[str, Any]] = None,
-        request_id: Optional[str] = None,
-        timeout: Optional[int] = None,
-        conversation_id: Optional[str] = None,  # 用于关联多轮对话
-    ):
-        self.task_id = task_id
-        self.interaction_type = interaction_type
-        self.context = context
-        self.metadata = metadata or {}
-        self.request_id = request_id
-        self.timeout = timeout
-        self.conversation_id = conversation_id
-        self.created_at = None  # 将在请求创建时设置
-
-# 添加人机交互结果模型
-class HumanInteractionResult:
-    """人机交互结果的数据模型"""
-    def __init__(
-        self,
-        request_id: str,
-        interaction_type: InteractionType,
-        status: ApprovalStatus,  # 复用ApprovalStatus表示交互状态
-        response: Optional[Dict[str, Any]] = None,  # 人类提供的响应数据
-        feedback: Optional[Dict[str, Any]] = None,
-        responded_by: Optional[str] = None,
-        responded_at: Optional[str] = None,
-        error: Optional[str] = None,
-        conversation_id: Optional[str] = None,  # 用于关联多轮对话
-    ):
-        self.request_id = request_id
-        self.interaction_type = interaction_type
-        self.status = status
-        self.response = response or {}
-        self.feedback = feedback or {}
-        self.responded_by = responded_by
-        self.responded_at = responded_at
-        self.error = error
-        self.conversation_id = conversation_id
+@dataclass
+class HumanLoopResult:
+    """人机循环结果的数据模型 / Human loop result data model"""
+    conversation_id: str  # 用于关联多轮对话 / Used to associate multi-turn conversations
+    request_id: str  # 请求ID / Request identifier
+    loop_type: HumanLoopType  # 循环类型 / Loop type
+    status: HumanLoopStatus  # 循环状态 / Loop status
+    response: Dict[str, Any] = field(default_factory=dict)  # 人类提供的响应数据 / Response data provided by human
+    feedback: Dict[str, Any] = field(default_factory=dict)  # 反馈信息 / Feedback information
+    responded_by: Optional[str] = None  # 响应者 / Responder
+    responded_at: Optional[str] = None  # 响应时间 / Response time
+    error: Optional[str] = None  # 错误信息 / Error message
 
 @runtime_checkable
 class HumanLoopProvider(Protocol):
     """Human-in-the-loop Provider Protocol"""
     
     @abstractmethod
-    async def request_approval(
+    async def request_humanloop(
         self,
         task_id: str,
+        conversation_id: str,
+        loop_type: HumanLoopType,
         context: Dict[str, Any],
         metadata: Optional[Dict[str, Any]] = None,
         timeout: Optional[int] = None
-    ) -> ApprovalResult:
-        """请求人类批准
+    ) -> HumanLoopResult:
+        """请求人机循环
         
         Args:
             task_id: 任务标识符
-            context: 提供给人类审核者的上下文信息
+            conversation_id: 对话ID，用于多轮对话
+            loop_type: 循环类型
+            context: 提供给人类的上下文信息
             metadata: 附加元数据
             timeout: 请求超时时间（秒）
             
         Returns:
-            ApprovalResult: 包含请求ID和初始状态的结果对象
+            HumanLoopResult: 包含请求ID和初始状态的结果对象
         """
         pass
 
     @abstractmethod
-    async def check_approval_status(
-        self, 
+    async def check_request_status(
+        self,
+        conversation_id: str,
         request_id: str
-    ) -> ApprovalResult:
-        """检查批准状态
+    ) -> HumanLoopResult:
+        """检查请求状态
         
         Args:
-            request_id: 请求标识符
+            conversation_id: 对话标识符，用于关联多轮对话
+            request_id: 请求标识符，用于标识具体的交互请求
             
         Returns:
-            ApprovalResult: 包含当前状态的结果对象
+            HumanLoopResult: 包含当前请求状态的结果对象，包括状态、响应数据等信息
+        """
+        pass
+    @abstractmethod
+    async def check_conversation_status(
+        self,
+        conversation_id: str
+    ) -> HumanLoopResult:
+        """检查对话状态
+        
+        Args:
+            conversation_id: 对话标识符
+            
+        Returns:
+            HumanLoopResult: 包含对话最新请求的状态
         """
         pass
         
     @abstractmethod
-    async def cancel_approval_request(
+    async def cancel_request(
         self,
+        conversation_id: str,
         request_id: str
     ) -> bool:
-        """取消批准请求
+        """取消人机循环请求
         
         Args:
-            request_id: 请求标识符
+            conversation_id: 对话标识符，用于关联多轮对话
+            request_id: 请求标识符，用于标识具体的交互请求
+            
+        Returns:
+            bool: 取消是否成功，True表示取消成功，False表示取消失败
+        """
+        pass
+    
+    @abstractmethod
+    async def cancel_conversation(
+        self,
+        conversation_id: str
+    ) -> bool:
+        """取消整个对话
+        
+        Args:
+            conversation_id: 对话标识符
             
         Returns:
             bool: 取消是否成功
         """
         pass
     
-    # 添加人机交互方法
     @abstractmethod
-    async def request_human_interaction(
+    async def continue_humanloop(
         self,
-        task_id: str,
-        interaction_type: InteractionType,
+        conversation_id: str,
         context: Dict[str, Any],
         metadata: Optional[Dict[str, Any]] = None,
         timeout: Optional[int] = None,
-        conversation_id: Optional[str] = None
-    ) -> HumanInteractionResult:
-        """请求人机交互
+    ) -> HumanLoopResult:
+        """继续人机循环
         
         Args:
-            task_id: 任务标识符
-            interaction_type: 交互类型
-            context: 提供给人类的上下文信息
-            metadata: 附加元数据
-            timeout: 请求超时时间（秒）
             conversation_id: 对话ID，用于多轮对话
-            
-        Returns:
-            HumanInteractionResult: 包含请求ID和初始状态的结果对象
-        """
-        pass
-    
-    @abstractmethod
-    async def check_interaction_status(
-        self, 
-        request_id: str
-    ) -> HumanInteractionResult:
-        """检查交互状态
-        
-        Args:
-            request_id: 请求标识符
-            
-        Returns:
-            HumanInteractionResult: 包含当前状态的结果对象
-        """
-        pass
-    
-    @abstractmethod
-    async def continue_conversation(
-        self,
-        conversation_id: str,
-        context: Dict[str, Any],
-        metadata: Optional[Dict[str, Any]] = None,
-        timeout: Optional[int] = None
-    ) -> HumanInteractionResult:
-        """继续多轮对话
-        
-        Args:
-            conversation_id: 对话ID
             context: 提供给人类的上下文信息
             metadata: 附加元数据
             timeout: 请求超时时间（秒）
             
         Returns:
-            HumanInteractionResult: 包含请求ID和初始状态的结果对象
-        """
-        pass
-    
-    @abstractmethod
-    async def end_conversation(
-        self,
-        conversation_id: str
-    ) -> bool:
-        """结束多轮对话
-        
-        Args:
-            conversation_id: 对话ID
-            
-        Returns:
-            bool: 结束是否成功
+            HumanLoopResult: 包含请求ID和状态的结果对象
         """
         pass
 
-class ApprovalCallback(ABC):
-    """批准回调的抽象类"""
+class HumanLoopCallback(ABC):
+    """人机循环回调的抽象类"""
     
     @abstractmethod
-    async def on_approval_received(
+    async def on_humanloop_update(
         self, 
-        request_id: str, 
-        result: ApprovalResult
-    ):
-        """当收到批准结果时的回调
-        
-        Args:
-            request_id: 请求标识符
-            result: 批准结果
-        """
-        pass
-        
-    @abstractmethod
-    async def on_approval_timeout(
-        self,
-        request_id: str
-    ):
-        """当批准请求超时时的回调
-        
-        Args:
-            request_id: 请求标识符
-        """
-        pass
-        
-    @abstractmethod
-    async def on_approval_error(
-        self,
-        request_id: str,
-        error: str
-    ):
-        """当批准请求发生错误时的回调
-        
-        Args:
-            request_id: 请求标识符
-            error: 错误信息
-        """
-        pass
-
-# 添加人机交互回调
-class HumanInteractionCallback(ABC):
-    """人机交互回调的抽象类"""
-    
-    @abstractmethod
-    async def on_interaction_received(
-        self, 
-        request_id: str, 
-        result: HumanInteractionResult
-    ):
-        """当收到交互结果时的回调
-        
-        Args:
-            request_id: 请求标识符
-            result: 交互结果
-        """
-        pass
-    
-    @abstractmethod
-    async def on_conversation_update(
-        self,
         conversation_id: str,
-        result: HumanInteractionResult
+        request_id: str, 
+        result: HumanLoopResult
     ):
-        """当对话更新时的回调
+        """当请求更新时的回调
         
         Args:
             conversation_id: 对话标识符
-            result: 最新的交互结果
+            request_id: 请求标识符
+            result: 循环结果
         """
         pass
         
     @abstractmethod
-    async def on_interaction_timeout(
+    async def on_humanloop_timeout(
         self,
+        conversation_id: str,
         request_id: str
     ):
-        """当交互请求超时时的回调
+        """当请求超时时的回调
         
         Args:
+            conversation_id: 对话标识符
             request_id: 请求标识符
         """
         pass
         
     @abstractmethod
-    async def on_interaction_error(
+    async def on_humanloop_error(
         self,
+        conversation_id: str,
         request_id: str,
         error: str
     ):
-        """当交互请求发生错误时的回调
+        """当请求发生错误时的回调
         
         Args:
+            conversation_id: 对话标识符
             request_id: 请求标识符
             error: 错误信息
         """
         pass
 
 class HumanLoopManager(ABC):
-    """人机交互管理器的抽象类"""
+    """人机循环管理器的抽象类"""
     
     @abstractmethod
     async def register_provider(
         self,
         provider: HumanLoopProvider,
         provider_id: Optional[str] = None
-    ):
-        """注册人机交互提供者
+    ) -> str:
+        """注册人机循环提供者
         
         Args:
-            provider: 人机交互提供者实例
+            provider: 人机循环提供者实例
             provider_id: 提供者标识符（可选）
-        """
-        pass
-        
-    @abstractmethod
-    async def request_approval(
-        self,
-        task_id: str,
-        context: Dict[str, Any],
-        callback: Optional[ApprovalCallback] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        provider_id: Optional[str] = None,
-        timeout: Optional[int] = None,
-        blocking: bool = False
-    ) -> Union[str, ApprovalResult]:
-        """请求人类批准
-        
-        Args:
-            task_id: 任务标识符
-            context: 提供给人类审核者的上下文信息
-            callback: 回调对象（可选）
-            metadata: 附加元数据
-            provider_id: 使用特定提供者的ID（可选）
-            timeout: 请求超时时间（秒）
-            blocking: 是否阻塞等待结果
             
         Returns:
-            Union[str, ApprovalResult]: 如果blocking=False，返回请求ID；否则返回批准结果
+            str: 注册成功后的提供者ID
         """
         pass
-    
-    # 添加人机交互方法
+        
     @abstractmethod
-    async def request_human_interaction(
+    async def request_humanloop(
         self,
         task_id: str,
-        interaction_type: InteractionType,
+        conversation_id: str,
+        loop_type: HumanLoopType,
         context: Dict[str, Any],
-        callback: Optional[HumanInteractionCallback] = None,
+        callback: Optional[HumanLoopCallback] = None,
         metadata: Optional[Dict[str, Any]] = None,
         provider_id: Optional[str] = None,
         timeout: Optional[int] = None,
         blocking: bool = False,
-        conversation_id: Optional[str] = None
-    ) -> Union[str, HumanInteractionResult]:
-        """请求人机交互
+    ) -> Union[str, HumanLoopResult]:
+        """请求人机循环
         
         Args:
             task_id: 任务标识符
-            interaction_type: 交互类型
+            conversation_id: 对话ID，用于多轮对话
+            loop_type: 循环类型
             context: 提供给人类的上下文信息
             callback: 回调对象（可选）
             metadata: 附加元数据
             provider_id: 使用特定提供者的ID（可选）
             timeout: 请求超时时间（秒）
             blocking: 是否阻塞等待结果
-            conversation_id: 对话ID，用于多轮对话
             
         Returns:
-            Union[str, HumanInteractionResult]: 如果blocking=False，返回请求ID；否则返回交互结果
+            Union[str, HumanLoopResult]: 如果blocking=False，返回请求ID；否则返回循环结果
         """
         pass
     
     @abstractmethod
-    async def continue_conversation(
+    async def continue_humanloop(
         self,
         conversation_id: str,
         context: Dict[str, Any],
-        callback: Optional[HumanInteractionCallback] = None,
+        callback: Optional[HumanLoopCallback] = None,
         metadata: Optional[Dict[str, Any]] = None,
         provider_id: Optional[str] = None,
         timeout: Optional[int] = None,
-        blocking: bool = False
-    ) -> Union[str, HumanInteractionResult]:
-        """继续多轮对话
+        blocking: bool = False,
+    ) -> Union[str, HumanLoopResult]:
+        """继续人机循环
         
         Args:
-            conversation_id: 对话ID
+            conversation_id: 对话ID，用于多轮对话
             context: 提供给人类的上下文信息
             callback: 回调对象（可选）
             metadata: 附加元数据
@@ -431,23 +294,123 @@ class HumanLoopManager(ABC):
             blocking: 是否阻塞等待结果
             
         Returns:
-            Union[str, HumanInteractionResult]: 如果blocking=False，返回请求ID；否则返回交互结果
+            Union[str, HumanLoopResult]: 如果blocking=False，返回请求ID；否则返回循环结果
         """
         pass
     
     @abstractmethod
-    async def end_conversation(
+    async def check_request_status(
+        self,
+        conversation_id: str,
+        request_id: str,
+        provider_id: Optional[str] = None
+    ) -> HumanLoopResult:
+        """检查请求状态
+        
+        Args:
+            conversation_id: 对话标识符
+            request_id: 请求标识符
+            provider_id: 使用特定提供者的ID（可选）
+            
+        Returns:
+            HumanLoopResult: 包含当前请求状态的结果对象
+        """
+        pass
+    
+    @abstractmethod
+    async def check_conversation_status(
+        self,
+        conversation_id: str,
+        provider_id: Optional[str] = None
+    ) -> HumanLoopResult:
+        """检查对话状态
+        
+        Args:
+            conversation_id: 对话标识符
+            provider_id: 使用特定提供者的ID（可选）
+            
+        Returns:
+            HumanLoopResult: 包含对话最新请求的状态
+        """
+        pass
+    
+    @abstractmethod
+    async def cancel_request(
+        self,
+        conversation_id: str,
+        request_id: str,
+        provider_id: Optional[str] = None
+    ) -> bool:
+        """取消特定请求
+        
+        Args:
+            conversation_id: 对话标识符
+            request_id: 请求标识符
+            provider_id: 使用特定提供者的ID（可选）
+            
+        Returns:
+            bool: 取消是否成功
+        """
+        pass
+    
+    @abstractmethod
+    async def cancel_conversation(
         self,
         conversation_id: str,
         provider_id: Optional[str] = None
     ) -> bool:
-        """结束多轮对话
+        """取消整个对话
         
         Args:
-            conversation_id: 对话ID
+            conversation_id: 对话标识符
             provider_id: 使用特定提供者的ID（可选）
             
         Returns:
-            bool: 结束是否成功
+            bool: 取消是否成功
+        """
+        pass
+    
+    @abstractmethod
+    async def get_provider(
+        self,
+        provider_id: Optional[str] = None
+    ) -> HumanLoopProvider:
+        """获取指定的提供者实例
+        
+        Args:
+            provider_id: 提供者ID，如果为None则返回默认提供者
+            
+        Returns:
+            HumanLoopProvider: 提供者实例
+            
+        Raises:
+            ValueError: 如果指定的提供者不存在
+        """
+        pass
+    
+    @abstractmethod
+    async def list_providers(self) -> Dict[str, HumanLoopProvider]:
+        """列出所有注册的提供者
+        
+        Returns:
+            Dict[str, HumanLoopProvider]: 提供者ID到提供者实例的映射
+        """
+        pass
+    
+    @abstractmethod
+    async def set_default_provider(
+        self,
+        provider_id: str
+    ) -> bool:
+        """设置默认提供者
+        
+        Args:
+            provider_id: 提供者ID
+            
+        Returns:
+            bool: 设置是否成功
+            
+        Raises:
+            ValueError: 如果指定的提供者不存在
         """
         pass

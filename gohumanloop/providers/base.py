@@ -1,38 +1,266 @@
 from abc import ABC
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 import asyncio
 import time
 import uuid
 from datetime import datetime
+from collections import defaultdict
 
-from gohumanloop.core.interface import HumanLoopProvider, ApprovalResult, ApprovalStatus
+from gohumanloop.core.interface import (
+    HumanLoopProvider, HumanLoopResult, HumanLoopStatus, HumanLoopType
+)
 
 class BaseProvider(HumanLoopProvider, ABC):
-    """基础人机交互提供者实现"""
+    """基础人机循环提供者实现"""
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
-        self._requests = {}  # 存储请求信息
+        # 存储请求信息，使用 (conversation_id, request_id) 作为键
+        self._requests = {}
+        # 存储对话信息，包括对话中的请求列表和最新请求ID
+        self._conversations = {}
+        # 用于快速查找对话中的请求
+        self._conversation_requests = defaultdict(list)
         
     def _generate_request_id(self) -> str:
         """生成唯一请求ID"""
         return str(uuid.uuid4())
         
-    def _store_request(self, request_id: str, task_id: str, context: Dict[str, Any], 
-                      metadata: Dict[str, Any], timeout: Optional[int]) -> None:
+    def _store_request(
+        self,
+        conversation_id: str,
+        request_id: str,
+        task_id: str,
+        loop_type: HumanLoopType,
+        context: Dict[str, Any],
+        metadata: Dict[str, Any],
+        timeout: Optional[int],
+    ) -> None:
         """存储请求信息"""
-        self._requests[request_id] = {
+        # 使用元组 (conversation_id, request_id) 作为键存储请求信息
+        self._requests[(conversation_id, request_id)] = {
             "task_id": task_id,
+            "loop_type": loop_type,
             "context": context,
             "metadata": metadata,
             "created_at": datetime.now().isoformat(),
-            "status": ApprovalStatus.PENDING,
-            "timeout": timeout
+            "status": HumanLoopStatus.PENDING,
+            "timeout": timeout,
         }
         
-    async def cancel_approval_request(self, request_id: str) -> bool:
-        """取消批准请求的基本实现"""
-        if request_id in self._requests:
-            del self._requests[request_id]
+        # 更新对话信息
+        if conversation_id not in self._conversations:
+            self._conversations[conversation_id] = {
+                "task_id": task_id,
+                "latest_request_id": None,
+                "created_at": datetime.now().isoformat(),
+            }
+        
+        # 添加请求到对话的请求列表
+        self._conversation_requests[conversation_id].append(request_id)
+        # 更新最新请求ID
+        self._conversations[conversation_id]["latest_request_id"] = request_id
+        
+    def _get_request(self, conversation_id: str, request_id: str) -> Optional[Dict[str, Any]]:
+        """获取请求信息"""
+        return self._requests.get((conversation_id, request_id))
+        
+    def _get_conversation(self, conversation_id: str) -> Optional[Dict[str, Any]]:
+        """获取对话信息"""
+        return self._conversations.get(conversation_id)
+        
+    def _get_conversation_requests(self, conversation_id: str) -> List[str]:
+        """获取对话中的所有请求ID"""
+        return self._conversation_requests.get(conversation_id, [])
+        
+    async def request_humanloop(
+        self,
+        task_id: str,
+        conversation_id: str,
+        loop_type: HumanLoopType,
+        context: Dict[str, Any],
+        metadata: Optional[Dict[str, Any]] = None,
+        timeout: Optional[int] = None
+    ) -> HumanLoopResult:
+        """请求人机循环
+        
+        Args:
+            task_id: 任务标识符
+            conversation_id: 对话ID，用于多轮对话
+            loop_type: 循环类型
+            context: 提供给人类的上下文信息
+            metadata: 附加元数据
+            timeout: 请求超时时间（秒）
+            
+        Returns:
+            HumanLoopResult: 包含请求ID和初始状态的结果对象
+        """
+        # 子类需要实现此方法
+        raise NotImplementedError("Subclasses must implement request_humanloop")
+        
+    async def check_request_status(
+        self,
+        conversation_id: str,
+        request_id: str
+    ) -> HumanLoopResult:
+        """检查请求状态
+        
+        Args:
+            conversation_id: 对话标识符，用于关联多轮对话
+            request_id: 请求标识符，用于标识具体的交互请求
+            
+        Returns:
+            HumanLoopResult: 包含当前请求状态的结果对象，包括状态、响应数据等信息
+        """
+        request_info = self._get_request(conversation_id, request_id)
+        if not request_info:
+            return HumanLoopResult(
+                conversation_id=conversation_id,
+                request_id=request_id,
+                loop_type=HumanLoopType.CONVERSATION,
+                status=HumanLoopStatus.ERROR,
+                error=f"Request '{request_id}' not found in conversation '{conversation_id}'"
+            )
+            
+        # 子类需要实现具体的状态检查逻辑
+        raise NotImplementedError("Subclasses must implement check_request_status")
+    
+    async def check_conversation_status(
+        self,
+        conversation_id: str
+    ) -> HumanLoopResult:
+        """检查对话状态
+        
+        Args:
+            conversation_id: 对话标识符
+            
+        Returns:
+            HumanLoopResult: 包含对话最新请求的状态
+        """
+        conversation_info = self._get_conversation(conversation_id)
+        if not conversation_info:
+            return HumanLoopResult(
+                conversation_id=conversation_id,
+                request_id="",
+                loop_type=HumanLoopType.CONVERSATION,
+                status=HumanLoopStatus.ERROR,
+                error=f"Conversation '{conversation_id}' not found"
+            )
+            
+        latest_request_id = conversation_info.get("latest_request_id")
+        if not latest_request_id:
+            return HumanLoopResult(
+                conversation_id=conversation_id,
+                request_id="",
+                loop_type=HumanLoopType.CONVERSATION,
+                status=HumanLoopStatus.ERROR,
+                error=f"No requests found in conversation '{conversation_id}'"
+            )
+            
+        return await self.check_request_status(conversation_id, latest_request_id)
+        
+    async def cancel_request(
+        self,
+        conversation_id: str,
+        request_id: str
+    ) -> bool:
+        """取消人机循环请求
+        
+        Args:
+            conversation_id: 对话标识符，用于关联多轮对话
+            request_id: 请求标识符，用于标识具体的交互请求
+            
+        Returns:
+            bool: 取消是否成功，True表示取消成功，False表示取消失败
+        """
+        request_key = (conversation_id, request_id)
+        if request_key in self._requests:
+            # 更新请求状态为已取消
+            self._requests[request_key]["status"] = HumanLoopStatus.CANCELLED
             return True
         return False
+    
+    async def cancel_conversation(
+        self,
+        conversation_id: str
+    ) -> bool:
+        """取消整个对话
+        
+        Args:
+            conversation_id: 对话标识符
+            
+        Returns:
+            bool: 取消是否成功
+        """
+        if conversation_id not in self._conversations:
+            return False
+            
+        # 取消对话中的所有请求
+        success = True
+        for request_id in self._get_conversation_requests(conversation_id):
+            request_key = (conversation_id, request_id)
+            if request_key in self._requests:
+                # 更新请求状态为已取消
+                # 只有请求处在中间状态(PENDING/IN_PROGRESS)时才能取消
+                if self._requests[request_key]["status"] in [HumanLoopStatus.PENDING, HumanLoopStatus.INPROGRESS]:
+                    self._requests[request_key]["status"] = HumanLoopStatus.CANCELLED
+            else:
+                success = False
+                
+        return success
+        
+    async def continue_humanloop(
+        self,
+        conversation_id: str,
+        context: Dict[str, Any],
+        metadata: Optional[Dict[str, Any]] = None,
+        timeout: Optional[int] = None,
+    ) -> HumanLoopResult:
+        """继续人机循环
+        
+        Args:
+            conversation_id: 对话ID，用于多轮对话
+            context: 提供给人类的上下文信息
+            metadata: 附加元数据
+            timeout: 请求超时时间（秒）
+            
+        Returns:
+            HumanLoopResult: 包含请求ID和状态的结果对象
+        """
+        # 检查对话是否存在
+        conversation_info = self._get_conversation(conversation_id)
+        if not conversation_info:
+            return HumanLoopResult(
+                conversation_id=conversation_id,
+                request_id="",
+                loop_type=HumanLoopType.CONVERSATION,
+                status=HumanLoopStatus.ERROR,
+                error=f"Conversation '{conversation_id}' not found"
+            )
+            
+        # 子类需要实现具体的继续对话逻辑
+        raise NotImplementedError("Subclasses must implement continue_humanloop")
+        
+    def get_conversation_history(self, conversation_id: str) -> List[Dict[str, Any]]:
+        """获取指定对话的完整历史记录
+        
+        Args:
+            conversation_id: 对话ID
+            
+        Returns:
+            List[Dict[str, Any]]: 对话历史记录列表，每个元素包含请求ID、状态、上下文、响应等信息
+        """
+        conversation_history = []
+        for request_id in self._get_conversation_requests(conversation_id):
+            request_key = (conversation_id, request_id)
+            if request_key in self._requests:
+                request_info = self._requests[request_key]
+                conversation_history.append({
+                    "request_id": request_id,
+                    "status": request_info.get("status").value if request_info.get("status") else None,
+                    "context": request_info.get("context"),
+                    "response": request_info.get("response"),
+                    "responded_by": request_info.get("responded_by"),
+                    "responded_at": request_info.get("responded_at")
+                })
+        return conversation_history
