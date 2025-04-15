@@ -48,8 +48,10 @@ class LangGraphAdapter:
         self,
         task_id: Optional[str] = None,
         conversation_id: Optional[str] = None,
+        ret_key: str = "approval_result",
         timeout: Optional[int] = None,
-    ):
+        execute_on_reject: bool = False,
+    ) -> HumanLoopWrapper:
         """审批场景装饰器"""
         if task_id is None:
             task_id = str(uuid.uuid4())
@@ -57,7 +59,7 @@ class LangGraphAdapter:
             conversation_id = str(uuid.uuid4())
             
         def decorator(fn):
-                return self._approve_cli(fn, task_id, conversation_id, timeout)
+                return self._approve_cli(fn, task_id, conversation_id, ret_key, timeout, execute_on_reject)
         return HumanLoopWrapper(decorator)
 
     def _approve_cli(
@@ -65,24 +67,27 @@ class LangGraphAdapter:
         fn: Callable[[T], R],
         task_id: str,
         conversation_id: str,
-        timeout: Optional[int]
-    ) -> Callable[[T], R | str]:
+        ret_key: str = "approval_result",
+        timeout: Optional[int] = None,
+        execute_on_reject: bool = False,
+    ) -> Callable[[T], R | None]:
         """
-        将函数类型从 Callable[[T], R] 转换为 Callable[[T], R | str]
+        将函数类型从 Callable[[T], R] 转换为 Callable[[T], R | None]
         
-        这种转换主要用于LLM场景:
-        1. 允许函数返回字符串形式的错误信息
-        2. 保持与原始返回类型的兼容性
-        3. 便于错误处理和消息传递
+        通过关键字参数传递审批结果，保持原函数签名不变
+        
+        这种方式的优势:
+        1. 不改变原函数的返回类型，保持与LangGraph工作流的兼容性
+        2. 被装饰函数可以选择是否使用审批结果信息
+        3. 可以传递更丰富的审批上下文信息
         
         注意:
-        - 这种方式可能会影响类型检查
-        - 建议在确保框架支持异常处理的情况下使用标准的异常处理机制
-        - 当前实现是为了兼容不同框架的临时解决方案
+        - 被装饰函数需要接受approval_key参数才能获取审批结果
+        - 如果审批被拒绝，根据execute_on_reject参数决定是否执行函数
         """
 
         @wraps(fn)
-        async def async_wrapper(*args, **kwargs) -> R | str:
+        async def async_wrapper(*args, **kwargs) -> R | None:
             result = await self.manager.request_humanloop(
                 task_id=task_id,
                 conversation_id=conversation_id,
@@ -90,10 +95,14 @@ class LangGraphAdapter:
                 context={
                     "function": fn.__name__,
                     "signature": str(fn.__code__.co_varnames),
+                    "args": str(args),
+                    "kwargs": str(kwargs),
                     "doc": fn.__doc__ or "No documentation available",
                     "approval_template": f"""
 Function Name: {fn.__name__}
 Parameters: {', '.join(fn.__code__.co_varnames)}
+Arguments: {args}
+Keyword Arguments: {kwargs}
 Documentation: {fn.__doc__ or 'No documentation available'}
 
 Please review and approve/reject this function execution.
@@ -102,26 +111,47 @@ Please review and approve/reject this function execution.
                 timeout=timeout or self.default_timeout,
                 blocking=True
             )
+
+            # 初始化审批结果对象为None
+            approval_info = None
             
+            if isinstance(result, HumanLoopResult):
+                # 如果结果是HumanLoopResult类型，则构建完整的审批信息
+                approval_info = {
+                    'conversation_id': result.conversation_id,
+                    'request_id': result.request_id,
+                    'loop_type': result.loop_type,
+                    'status': result.status,
+                    'response': result.response,
+                    'feedback': result.feedback,
+                    'responded_by': result.responded_by,
+                    'responded_at': result.responded_at,
+                    'error': result.error
+                }
+
+            kwargs[ret_key] = approval_info
             # 检查审批结果
-            if not isinstance(result, HumanLoopResult):
-                return "Error: Invalid approval result"
-                
-            # 根据审批状态处理
-            if result.status == HumanLoopStatus.APPROVED:
-                try:
+            if isinstance(result, HumanLoopResult):
+                # 根据审批状态处理
+                if result.status == HumanLoopStatus.APPROVED:
                     if iscoroutinefunction(fn):
                         return await fn(*args, **kwargs)
                     return fn(*args, **kwargs)
-                except Exception as e:
-                    return f"Error running {fn.__name__}: {e}"
-            elif result.status == HumanLoopStatus.REJECTED:
-                return f"Function {fn.__name__} was rejected: {result.response}"
+                elif result.status == HumanLoopStatus.REJECTED:
+                     # 如果设置了拒绝后执行，则执行函数
+                    if execute_on_reject:
+                        if iscoroutinefunction(fn):
+                            return await fn(*args, **kwargs)
+                        return fn(*args, **kwargs)
+                    # 否则返回拒绝信息
+                    reason = result.response
+                    raise ValueError(f"Function {fn.__name__} execution not approved: {reason}")
+                
             else:
-                return f"Approval timeout or error for {fn.__name__}"
+                raise ValueError(f"Approval timeout or error for {fn.__name__}")
 
         @wraps(fn)
-        def sync_wrapper(*args, **kwargs) -> R | str:
+        def sync_wrapper(*args, **kwargs) -> R | None:
             return asyncio.run(async_wrapper(*args, **kwargs))
 
         # 根据被装饰函数类型返回对应的wrapper
@@ -133,9 +163,9 @@ Please review and approve/reject this function execution.
         self,
         task_id: Optional[str] = None,
         conversation_id: Optional[str] = None,
-        ret_key: str = "response",
+        ret_key: str = "info_result",
         timeout: Optional[int] = None,
-    ):
+    ) -> HumanLoopWrapper:
         """信息获取场景装饰器"""
 
         if task_id is None:
@@ -152,25 +182,36 @@ Please review and approve/reject this function execution.
         fn: Callable[[T], R],
         task_id: str,
         conversation_id: str,
-        ret_key: str = "response", # 接收关键字参数
+        ret_key: str = "info_result",
         timeout: Optional[int] = None,
-    ) -> Callable[[T], R | str]:
-        """信息获取场景装饰器
-        将函数类型从 Callable[[T], R] 转换为 Callable[[T], R | str]
+    ) -> Callable[[T], R | None]:
+        """信息获取场景的内部实现装饰器
+        将函数类型从 Callable[[T], R] 转换为 Callable[[T], R | None]
         
-        这种转换主要用于LLM场景:
-        1. 允许函数返回字符串形式的错误信息
-        2. 保持与原始返回类型的兼容性
-        3. 便于错误处理和消息传递
+        主要功能:
+        1. 通过人机交互获取所需信息
+        2. 将获取的信息通过ret_key注入到函数参数中
+        3. 支持同步和异步函数调用
+        
+        参数说明:
+        - fn: 被装饰的目标函数
+        - task_id: 任务唯一标识
+        - conversation_id: 对话唯一标识
+        - ret_key: 信息注入的参数名
+        - timeout: 超时时间(秒)
+        
+        返回:
+        - 装饰后的函数，保持原函数签名
+        - 如果人机交互失败，抛出ValueError
         
         注意:
-        - 这种方式可能会影响类型检查
-        - 建议在确保框架支持异常处理的情况下使用标准的异常处理机制
-        - 当前实现是为了兼容不同框架的临时解决方案
+        - 被装饰函数需要接受ret_key参数才能获取交互结果
+        - 交互结果包含完整的上下文信息
+        - 支持异步和同步函数自动适配
         """
 
         @wraps(fn)
-        async def async_wrapper(*args, **kwargs) -> R | str:
+        async def async_wrapper(*args, **kwargs) -> R | None:
             result = await self.manager.request_humanloop(
                 task_id=task_id,
                 conversation_id=conversation_id,
@@ -178,10 +219,14 @@ Please review and approve/reject this function execution.
                 context={
                     "function": fn.__name__,
                     "signature": str(fn.__code__.co_varnames),
+                    "args": str(args),
+                    "kwargs": str(kwargs),
                     "doc": fn.__doc__ or "No documentation available",
                     "info_template": f"""
 Function Name: {fn.__name__}
 Parameters: {', '.join(fn.__code__.co_varnames)}
+Arguments: {args}
+Keyword Arguments: {kwargs}
 Documentation: {fn.__doc__ or 'No documentation available'}
 
 Please provide the required information for this function.
@@ -191,21 +236,36 @@ Please provide the required information for this function.
                 blocking=True
             )
 
-            # 检查结果是否有效
-            if not isinstance(result, HumanLoopResult):
-                return "Error: Invalid information result"
+            # 初始化审批结果对象为None
+            resp_info = None
 
-            # 根据状态处理结果
-            if result.status == HumanLoopStatus.COMPLETED:
-                try:
-                    kwargs[ret_key] = result.response
-                    return fn(*args, **kwargs)
-                except Exception as e:
-                    return f"Error running {fn.__name__}: {e}"
+            if isinstance(result, HumanLoopResult):
+                # 如果结果是HumanLoopResult类型，则构建完整的审批信息
+                resp_info = {
+                    'conversation_id': result.conversation_id,
+                    'request_id': result.request_id,
+                    'loop_type': result.loop_type,
+                    'status': result.status,
+                    'response': result.response,
+                    'feedback': result.feedback,
+                    'responded_by': result.responded_by,
+                    'responded_at': result.responded_at,
+                    'error': result.error
+                }
+
+            kwargs[ret_key] = resp_info
+
+            # 检查结果是否有效
+            if isinstance(result, HumanLoopResult):
+                # 返回获取信息结果，由用户去判断是否使用
+                if iscoroutinefunction(fn):
+                    return await fn(*args, **kwargs)
+                return fn(*args, **kwargs)
             else:
-                return f"Information gathering failed or timed out for {fn.__name__}: {result.response}"
+                raise ValueError(f"Info request timeout or error for {fn.__name__}")
+
         @wraps(fn)
-        def sync_wrapper(*args, **kwargs) -> R | str:
+        def sync_wrapper(*args, **kwargs) -> R | None:
             return asyncio.run(async_wrapper(*args, **kwargs))
 
         # 根据被装饰函数类型返回对应的wrapper
