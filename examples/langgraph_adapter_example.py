@@ -12,6 +12,7 @@ from gohumanloop.core.manager import DefaultHumanLoopManager
 from gohumanloop.providers.terminal_provider import TerminalProvider
 from gohumanloop.core.interface import HumanLoopStatus
 import logging
+from typing_extensions import TypedDict
 
 # 设置日志配置
 logging.basicConfig(
@@ -39,7 +40,7 @@ llm = ChatOpenAI(
 )
 
 # 创建 HumanLoopManager 实例
-manager = DefaultHumanLoopManager(default_provider=TerminalProvider())
+manager = DefaultHumanLoopManager(initial_providers=TerminalProvider(name="TerminalProvider"))
 
 # 创建 LangGraphAdapter 实例
 adapter = LangGraphAdapter(manager, default_timeout=60)

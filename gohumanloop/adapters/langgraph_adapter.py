@@ -5,7 +5,7 @@ import uuid
 from inspect import iscoroutinefunction
 
 from gohumanloop.core.interface import (
-    HumanLoopManager, HumanLoopResult, HumanLoopStatus, HumanLoopType
+    HumanLoopManager, HumanLoopResult, HumanLoopStatus, HumanLoopType, HumanLoopCallback, HumanLoopProvider
 )
 
 # Define TypeVars for input and output types
@@ -51,6 +51,7 @@ class LangGraphAdapter:
         ret_key: str = "approval_result",
         timeout: Optional[int] = None,
         execute_on_reject: bool = False,
+        callback: Optional[Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]] = None,
     ) -> HumanLoopWrapper:
         """审批场景装饰器"""
         if task_id is None:
@@ -59,7 +60,7 @@ class LangGraphAdapter:
             conversation_id = str(uuid.uuid4())
             
         def decorator(fn):
-                return self._approve_cli(fn, task_id, conversation_id, ret_key, timeout, execute_on_reject)
+            return self._approve_cli(fn, task_id, conversation_id, ret_key, timeout, execute_on_reject, callback)
         return HumanLoopWrapper(decorator)
 
     def _approve_cli(
@@ -70,6 +71,7 @@ class LangGraphAdapter:
         ret_key: str = "approval_result",
         timeout: Optional[int] = None,
         execute_on_reject: bool = False,
+        callback: Optional[Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]] = None,
     ) -> Callable[[T], R | None]:
         """
         将函数类型从 Callable[[T], R] 转换为 Callable[[T], R | None]
@@ -88,26 +90,30 @@ class LangGraphAdapter:
 
         @wraps(fn)
         async def async_wrapper(*args, **kwargs) -> R | None:
+            # 判断 callback 是实例还是工厂函数
+            cb = None
+            if callable(callback) and not isinstance(callback, HumanLoopCallback):
+                # 工厂函数，传入state
+                state = args[0] if args else None
+                cb = callback(state)
+            else:
+                cb = callback
+
             result = await self.manager.request_humanloop(
                 task_id=task_id,
                 conversation_id=conversation_id,
                 loop_type=HumanLoopType.APPROVAL,
-                context={
+                context={ #TODO: 后续可以使用Prompt利用大模型来生成友好的审批模板
                     "function": fn.__name__,
                     "signature": str(fn.__code__.co_varnames),
                     "args": str(args),
                     "kwargs": str(kwargs),
                     "doc": fn.__doc__ or "No documentation available",
-                    "approval_template": f"""
-Function Name: {fn.__name__}
-Parameters: {', '.join(fn.__code__.co_varnames)}
-Arguments: {args}
-Keyword Arguments: {kwargs}
-Documentation: {fn.__doc__ or 'No documentation available'}
-
+                    "question": f"""
 Please review and approve/reject this function execution.
 """
                 },
+                callback=cb,
                 timeout=timeout or self.default_timeout,
                 blocking=True
             )
@@ -165,6 +171,7 @@ Please review and approve/reject this function execution.
         conversation_id: Optional[str] = None,
         ret_key: str = "info_result",
         timeout: Optional[int] = None,
+        callback: Optional[Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]] = None,
     ) -> HumanLoopWrapper:
         """信息获取场景装饰器"""
 
@@ -174,7 +181,7 @@ Please review and approve/reject this function execution.
             conversation_id = str(uuid.uuid4())
 
         def decorator(fn):
-            return self._get_info_cli(fn, task_id, conversation_id, ret_key, timeout)
+            return self._get_info_cli(fn, task_id, conversation_id, ret_key, timeout, callback)
         return HumanLoopWrapper(decorator)
 
     def _get_info_cli(
@@ -184,6 +191,7 @@ Please review and approve/reject this function execution.
         conversation_id: str,
         ret_key: str = "info_result",
         timeout: Optional[int] = None,
+        callback: Optional[Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]] = None,
     ) -> Callable[[T], R | None]:
         """信息获取场景的内部实现装饰器
         将函数类型从 Callable[[T], R] 转换为 Callable[[T], R | None]
@@ -212,27 +220,32 @@ Please review and approve/reject this function execution.
 
         @wraps(fn)
         async def async_wrapper(*args, **kwargs) -> R | None:
+
+              # 判断 callback 是实例还是工厂函数
+            cb = None
+            if callable(callback) and not isinstance(callback, HumanLoopCallback):
+                # 工厂函数，传入state
+                state = args[0] if args else None
+                cb = callback(state)
+            else:
+                cb = callback
+                
             result = await self.manager.request_humanloop(
                 task_id=task_id,
                 conversation_id=conversation_id,
                 loop_type=HumanLoopType.INFORMATION,
-                context={
+                context={ #TODO: 后续可以使用Prompt利用大模型来生成友好的审批模板
                     "function": fn.__name__,
                     "signature": str(fn.__code__.co_varnames),
                     "args": str(args),
                     "kwargs": str(kwargs),
                     "doc": fn.__doc__ or "No documentation available",
-                    "info_template": f"""
-Function Name: {fn.__name__}
-Parameters: {', '.join(fn.__code__.co_varnames)}
-Arguments: {args}
-Keyword Arguments: {kwargs}
-Documentation: {fn.__doc__ or 'No documentation available'}
-
+                    "question": f"""
 Please provide the required information for this function.
 """
                 },
                 timeout=timeout or self.default_timeout,
+                callback=cb,
                 blocking=True
             )
 
@@ -273,30 +286,99 @@ Please provide the required information for this function.
             return async_wrapper # type: ignore
         return sync_wrapper
     
-class LanggraphHumanLoopCallback:
-    """Langgraph专用的人机循环回调"""
-    
+class LangGraphHumanLoopCallback(HumanLoopCallback):
+    """LangGraph专用的人机循环回调，适配TypedDict或Pydantic BaseModel的State"""
     def __init__(
         self,
-        on_update: Optional[Callable[[Dict[str, Any], HumanLoopResult], Awaitable[None]]] = None,
-        on_timeout: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None,
-        on_error: Optional[Callable[[Dict[str, Any], str], Awaitable[None]]] = None
+        state: Any,
+        on_update: Optional[Callable[[Any, HumanLoopProvider, HumanLoopResult], Awaitable[None]]] = None,
+        on_timeout: Optional[Callable[[Any, HumanLoopProvider], Awaitable[None]]] = None,
+        on_error: Optional[Callable[[Any, HumanLoopProvider, Exception], Awaitable[None]]] = None
     ):
+        self.state = state
         self.on_update = on_update
         self.on_timeout = on_timeout
         self.on_error = on_error
-        
-    async def on_humanloop_update(self, state: Dict[str, Any], result: HumanLoopResult):
-        """状态更新回调"""
+
+    async def on_humanloop_update(
+        self,
+        provider: HumanLoopProvider,
+        result: HumanLoopResult
+    ):
         if self.on_update:
-            await self.on_update(state, result)
-            
-    async def on_humanloop_timeout(self, state: Dict[str, Any]):
-        """超时回调"""
+            await self.on_update(self.state, provider, result)
+
+    async def on_humanloop_timeout(
+        self,
+        provider: HumanLoopProvider,
+    ):
         if self.on_timeout:
-            await self.on_timeout(state)
-            
-    async def on_humanloop_error(self, state: Dict[str, Any], error: str):
-        """错误回调"""
+            await self.on_timeout(self.state, provider)
+
+    async def on_humanloop_error(
+        self,
+        provider: HumanLoopProvider,
+        error: Exception
+    ):
         if self.on_error:
-            await self.on_error(state, error)
+            await self.on_error(self.state, provider, error)
+
+
+def default_langgraph_callback_factory(state: Any) -> LangGraphHumanLoopCallback:
+    """为LangGraph框架提供默认的人机交互回调工厂
+    
+    该回调专注于:
+    1. 记录人机交互事件的日志
+    2. 提供调试信息
+    3. 收集性能指标
+    
+    注意: 该回调不会修改state，保持状态管理的清晰性
+    
+    参数:
+        state: LangGraph状态对象，仅用于日志关联
+        
+    返回:
+        配置好的LangGraphHumanLoopCallback实例
+    """
+    import logging
+    
+    logger = logging.getLogger("gohumanloop.langgraph")
+    
+    async def on_update(state, provider: HumanLoopProvider, result: HumanLoopResult):
+        """记录人机交互更新事件"""
+        logger.info(f"提供者ID: {provider.name}")
+        logger.info(
+            f"人机交互更新 "
+            f"状态={result.status}, "
+            f"响应={result.response}, "
+            f"响应者={result.responded_by}, "
+            f"响应时间={result.responded_at}, "
+            f"反馈={result.feedback}"
+        )
+        
+
+    async def on_timeout(state, provider: HumanLoopProvider):
+        """记录人机交互超时事件"""
+        
+        logger.info(f"提供者ID: {provider.name}")
+        from datetime import datetime
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        logger.warning(f"人机交互超时 - 发生时间: {current_time}")
+        
+        
+        # 这里可以添加告警逻辑，如发送通知等
+
+    async def on_error(state, provider: HumanLoopProvider, error: Exception):
+        """记录人机交互错误事件"""
+      
+        logger.info(f"提供者ID: {provider.name}")
+        from datetime import datetime
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        logger.error(f"人机交互错误 -  发生时间: {current_time} 错误信息: {error}")
+
+    return LangGraphHumanLoopCallback(
+        state=state,
+        on_update=on_update,
+        on_timeout=on_timeout,
+        on_error=on_error
+    )

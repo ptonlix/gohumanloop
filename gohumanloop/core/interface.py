@@ -62,6 +62,8 @@ class HumanLoopResult:
 class HumanLoopProvider(Protocol):
     """Human-in-the-loop Provider Protocol"""
     
+    name: str  # 提供者名称
+    
     @abstractmethod
     async def request_humanloop(
         self,
@@ -176,16 +178,14 @@ class HumanLoopCallback(ABC):
     
     @abstractmethod
     async def on_humanloop_update(
-        self, 
-        conversation_id: str,
-        request_id: str, 
+        self,
+        provider: HumanLoopProvider,
         result: HumanLoopResult
     ):
         """当请求更新时的回调
         
         Args:
-            conversation_id: 对话标识符
-            request_id: 请求标识符
+            provider: 人机循环提供者实例
             result: 循环结果
         """
         pass
@@ -193,29 +193,25 @@ class HumanLoopCallback(ABC):
     @abstractmethod
     async def on_humanloop_timeout(
         self,
-        conversation_id: str,
-        request_id: str
+        provider: HumanLoopProvider,
     ):
         """当请求超时时的回调
         
         Args:
-            conversation_id: 对话标识符
-            request_id: 请求标识符
+            provider: 人机循环提供者实例
         """
         pass
         
     @abstractmethod
     async def on_humanloop_error(
         self,
-        conversation_id: str,
-        request_id: str,
-        error: str
+        provider: HumanLoopProvider,
+        error: Exception
     ):
         """当请求发生错误时的回调
         
         Args:
-            conversation_id: 对话标识符
-            request_id: 请求标识符
+            provider: 人机循环提供者实例
             error: 错误信息
         """
         pass

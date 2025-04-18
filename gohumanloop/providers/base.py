@@ -13,15 +13,34 @@ from gohumanloop.core.interface import (
 class BaseProvider(HumanLoopProvider, ABC):
     """基础人机循环提供者实现"""
     
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, name: str,  config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
+        # 用户自定义名称，如果未提供则使用UUID
+        self.name = name
         # 存储请求信息，使用 (conversation_id, request_id) 作为键
         self._requests = {}
         # 存储对话信息，包括对话中的请求列表和最新请求ID
         self._conversations = {}
         # 用于快速查找对话中的请求
         self._conversation_requests = defaultdict(list)
+        # 存储超时任务
+        self._timeout_tasks = {}
+
+    def __str__(self) -> str:
+        """返回该实例的描述信息"""
+        total_conversations = len(self._conversations)
+        total_requests = len(self._requests)
+        active_requests = sum(1 for req in self._requests.values()
+                            if req["status"] in [HumanLoopStatus.PENDING, HumanLoopStatus.INPROGRESS])
         
+        return (f"conversations={total_conversations}, "
+                f"total_requests={total_requests}, "
+                f"active_requests={active_requests})")
+    
+    def __repr__(self) -> str:
+        """返回该实例的详细描述信息"""
+        return self.__str__()
+
     def _generate_request_id(self) -> str:
         """生成唯一请求ID"""
         return str(uuid.uuid4())
@@ -173,6 +192,12 @@ class BaseProvider(HumanLoopProvider, ABC):
         Returns:
             bool: 取消是否成功，True表示取消成功，False表示取消失败
         """
+
+         # 取消超时任务
+        if (conversation_id, request_id) in self._timeout_tasks:
+            self._timeout_tasks[(conversation_id, request_id)].cancel()
+            del self._timeout_tasks[(conversation_id, request_id)]
+
         request_key = (conversation_id, request_id)
         if request_key in self._requests:
             # 更新请求状态为已取消
@@ -204,6 +229,11 @@ class BaseProvider(HumanLoopProvider, ABC):
                 # 只有请求处在中间状态(PENDING/IN_PROGRESS)时才能取消
                 if self._requests[request_key]["status"] in [HumanLoopStatus.PENDING, HumanLoopStatus.INPROGRESS]:
                     self._requests[request_key]["status"] = HumanLoopStatus.CANCELLED
+                    
+                    # 取消该请求的超时任务
+                    if request_key in self._timeout_tasks:
+                        self._timeout_tasks[request_key].cancel()
+                        del self._timeout_tasks[request_key]
             else:
                 success = False
                 
@@ -264,3 +294,46 @@ class BaseProvider(HumanLoopProvider, ABC):
                     "responded_at": request_info.get("responded_at")
                 })
         return conversation_history
+
+
+    def _create_timeout_task(
+        self, 
+        conversation_id: str,
+        request_id: str, 
+        timeout: int
+    ):
+        """创建超时任务
+        
+        Args:
+            conversation_id: 对话ID
+            request_id: 请求ID
+            timeout: 超时时间（秒）
+        """
+        async def timeout_task():
+            await asyncio.sleep(timeout)
+            
+            # 检查当前状态
+            request_info = self._get_request(conversation_id, request_id)
+            if not request_info:
+                return
+                
+            current_status = request_info.get("status", HumanLoopStatus.PENDING)
+            
+            # 只有当状态为PENDING时才触发超时
+            # INPROGRESS状态表示对话正在进行中，不应视为超时
+            if current_status == HumanLoopStatus.PENDING:
+                # 更新请求状态为超时
+                request_info["status"] = HumanLoopStatus.EXPIRED
+                request_info["error"] = "Request timed out"
+            # 如果状态是INPROGRESS，重置超时任务
+            elif current_status == HumanLoopStatus.INPROGRESS:
+                # 对于进行中的对话，我们可以选择延长超时时间
+                # 这里我们简单地重新创建一个超时任务，使用相同的超时时间
+                if (conversation_id, request_id) in self._timeout_tasks:
+                    self._timeout_tasks[(conversation_id, request_id)].cancel()
+                new_task = asyncio.create_task(timeout_task())
+                self._timeout_tasks[(conversation_id, request_id)] = new_task
+                
+        task = asyncio.create_task(timeout_task())
+        self._timeout_tasks[(conversation_id, request_id)] = task
+    

@@ -10,7 +10,7 @@ async def example_usage():
     print("=== 终端提供者使用示例 ===")
     
     # 创建终端提供者
-    provider = TerminalProvider()
+    provider = TerminalProvider(name="example_provider")
     
     # 选择要运行的示例
     print("\n请选择要运行的示例:")

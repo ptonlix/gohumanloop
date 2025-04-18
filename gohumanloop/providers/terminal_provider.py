@@ -4,9 +4,7 @@ import json
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
-from gohumanloop.core.interface import (
-    HumanLoopProvider, HumanLoopResult, HumanLoopStatus, HumanLoopType
-)
+from gohumanloop.core.interface import (HumanLoopResult, HumanLoopStatus, HumanLoopType)
 from gohumanloop.providers.base import BaseProvider
 
 class TerminalProvider(BaseProvider):
@@ -16,18 +14,24 @@ class TerminalProvider(BaseProvider):
     用户可以通过终端输入来响应请求，支持审批、信息收集和对话类型的交互。
     """
     
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, name: str, config: Optional[Dict[str, Any]] = None):
         """初始化终端提供者
         
         Args:
+            name: 提供者名称
             config: 配置信息，可包含以下字段：
-                - prompt_template: 提示模板，默认为 "{context}"
-                - show_metadata: 是否显示元数据，默认为 True
+                - prompt_template: 提示模板，用于格式化显示给用户的内容，默认为 "{context}"
+                - show_metadata: 是否在交互时显示请求元数据，默认为 True
         """
-        super().__init__(config)
+        super().__init__(name, config)
         self.prompt_template = self.config.get("prompt_template", "{context}")
         self.show_metadata = self.config.get("show_metadata", True)
-        
+         
+    def __str__(self) -> str:
+        base_str = super().__str__()
+        terminal_info = f"- 终端提供者: 基于终端交互的人机循环实现\n"
+        return f"{terminal_info}{base_str}"
+    
     async def request_humanloop(
         self,
         task_id: str,
@@ -74,6 +78,10 @@ class TerminalProvider(BaseProvider):
         
         # 启动异步任务处理用户输入
         asyncio.create_task(self._process_terminal_interaction(conversation_id, request_id))
+        
+        # 如果设置了超时，创建超时任务
+        if timeout:
+            self._create_timeout_task(conversation_id, request_id, timeout)
         
         return result
         
@@ -172,6 +180,10 @@ class TerminalProvider(BaseProvider):
         
         # 启动异步任务处理用户输入
         asyncio.create_task(self._process_terminal_interaction(conversation_id, request_id))
+        
+        # 如果设置了超时，创建超时任务
+        if timeout:
+            self._create_timeout_task(conversation_id, request_id, timeout)
         
         return result
     
@@ -324,4 +336,3 @@ class TerminalProvider(BaseProvider):
             
         # 否则将整个上下文转换为 JSON 字符串
         return json.dumps(context, indent=2, ensure_ascii=False)
-    
