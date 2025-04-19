@@ -40,7 +40,7 @@ async def run_approval_example(provider):
         task_id="task_123",
         conversation_id="conv_456",
         loop_type=HumanLoopType.APPROVAL,
-        context={"message": "请审批以下内容：\n1. 购买新的服务器\n2. 升级现有系统"}
+        context={"message": "请审批以下内容：\n1. 购买新的服务器\n2. 升级现有系统", "question":"Please review and approve/reject this human loop execution."}
     )
     
     # 等待用户完成交互
@@ -118,7 +118,7 @@ async def run_information_example(provider):
         task_id="task_info",
         conversation_id="conv_info",
         loop_type=HumanLoopType.INFORMATION,
-        context={"message": "请提供您的联系方式以便我们进一步沟通"}
+        context={"message": "请提供您的联系方式以便我们进一步沟通",  "question": "Please provide the required information for the human loop",}
     )
     
     # 等待用户完成信息提供

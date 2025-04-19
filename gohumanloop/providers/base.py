@@ -1,7 +1,7 @@
 from abc import ABC
 from typing import Dict, Any, Optional, List, Tuple
 import asyncio
-import time
+import json
 import uuid
 from datetime import datetime
 from collections import defaultdict
@@ -12,6 +12,7 @@ from gohumanloop.core.interface import (
 
 class BaseProvider(HumanLoopProvider, ABC):
     """基础人机循环提供者实现"""
+
     
     def __init__(self, name: str,  config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
@@ -25,6 +26,8 @@ class BaseProvider(HumanLoopProvider, ABC):
         self._conversation_requests = defaultdict(list)
         # 存储超时任务
         self._timeout_tasks = {}
+
+        self.prompt_template = self.config.get("prompt_template", "{context}")
 
     def __str__(self) -> str:
         """返回该实例的描述信息"""
@@ -336,4 +339,73 @@ class BaseProvider(HumanLoopProvider, ABC):
                 
         task = asyncio.create_task(timeout_task())
         self._timeout_tasks[(conversation_id, request_id)] = task
+
+
+    def build_prompt(
+        self,
+        task_id: str,
+        conversation_id: str,
+        request_id: str,
+        loop_type: Any,
+        created_at: str,
+        context: Dict[str, Any],
+        metadata: Optional[Dict[str, Any]] = None,
+        color: Optional[bool] = None
+    ) -> str:
+        """
+        根据内容动态生成 prompt，仅显示有内容的部分，并适配不同终端颜色显示。
+        color: None=自动检测，True=强制彩色，False=无色
+        """
+        # 自动检测终端是否支持ANSI颜色
+        def _supports_color():
+            try:
+                import sys
+                if not hasattr(sys.stdout, "isatty") or not sys.stdout.isatty():
+                    return False
+                import os
+                if os.name == "nt":
+                    # Windows 10+ 支持ANSI，老版本不支持
+                    return "ANSICON" in os.environ or "WT_SESSION" in os.environ
+                return True
+            except Exception:
+                return False
+
+        if color is None:
+            color = _supports_color()
+
+        # 定义颜色
+        if color:
+            COLOR_TITLE = "\033[94m"   # 亮蓝色
+            COLOR_RESET = "\033[0m"
+        else:
+            COLOR_TITLE = ""
+            COLOR_RESET = ""
+
+        lines = []
+        lines.append(f"{COLOR_TITLE}=== Task Information ==={COLOR_RESET}")
+        lines.append(f"Task ID: {task_id}")
+        lines.append(f"Conversation ID: {conversation_id}")
+        lines.append(f"Request ID: {request_id}")
+        lines.append(f"HumanLoop Type: {getattr(loop_type, 'value', loop_type)}")
+        lines.append(f"Created At: {created_at}")
+
+        if context.get("message"):
+            lines.append(f"\n{COLOR_TITLE}=== Main Context ==={COLOR_RESET}")
+            lines.append(str(context["message"]))
+
+        if context.get("additional"):
+            lines.append(f"\n{COLOR_TITLE}=== Additional Context ==={COLOR_RESET}")
+            lines.append(str(context["additional"]))
+
+        if metadata:
+            lines.append(f"\n{COLOR_TITLE}=== Metadata ==={COLOR_RESET}")
+            lines.append(json.dumps(metadata, indent=2, ensure_ascii=False))
+
+        if context.get("question"):
+            lines.append(f"\n{COLOR_TITLE}=== Question ==={COLOR_RESET}")
+            lines.append(str(context["question"]))
+
+        lines.append(f"\n{COLOR_TITLE}=== END ==={COLOR_RESET}")
+
+        return "\n".join(lines)
     

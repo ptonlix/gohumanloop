@@ -1,4 +1,5 @@
 import asyncio
+from email import message
 import sys
 import json
 from typing import Dict, Any, Optional, List
@@ -24,7 +25,6 @@ class TerminalProvider(BaseProvider):
                 - show_metadata: 是否在交互时显示请求元数据，默认为 True
         """
         super().__init__(name, config)
-        self.prompt_template = self.config.get("prompt_template", "{context}")
         self.show_metadata = self.config.get("show_metadata", True)
          
     def __str__(self) -> str:
@@ -188,31 +188,21 @@ class TerminalProvider(BaseProvider):
         return result
     
     async def _process_terminal_interaction(self, conversation_id: str, request_id: str):
-        """处理终端交互
-        
-        Args:
-            conversation_id: 对话ID
-            request_id: 请求ID
-        """
         request_info = self._get_request(conversation_id, request_id)
         if not request_info:
             return 
-        
-        # 构建提示信息
-        context_str = self._format_context(request_info["context"])
-        prompt = self.prompt_template.format(context=context_str)
-        
-        # 显示元数据（如果配置为显示）
-        if self.show_metadata and request_info["metadata"]:
-            metadata_str = json.dumps(request_info["metadata"], indent=2, ensure_ascii=False)
-            print(f"\n--- 元数据 ---\n{metadata_str}\n")
-        
-        # 显示对话和请求ID
-        print(f"\n=== 对话ID: {conversation_id} | 请求ID: {request_id} ===")
-        
-        # 显示循环类型
+
+        prompt = self.build_prompt(
+            task_id=request_info["task_id"],
+            conversation_id=conversation_id,
+            request_id=request_id,
+            loop_type=request_info["loop_type"],
+            created_at=request_info.get("created_at", ""),
+            context=request_info["context"],
+            metadata=request_info.get("metadata")
+        )
+
         loop_type = request_info["loop_type"]
-        print(f"--- 交互类型: {loop_type.value} ---\n")
         
         # 显示提示信息
         print(prompt)
@@ -233,14 +223,14 @@ class TerminalProvider(BaseProvider):
             request_id: 请求ID
             request_info: 请求信息
         """
-        print("\n请输入您的决定 (approve/reject):")
+        print("\nPlease enter your decision (approve/reject):")
         
         # 使用 run_in_executor 在线程池中执行阻塞的 input() 调用
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(None, input)
 
         # 更新状态为进行中
-        request_info["status"] = HumanLoopStatus.INPROGRESS
+        # request_info["status"] = HumanLoopStatus.INPROGRESS
         
         # 处理响应
         response = response.strip().lower()
@@ -249,11 +239,11 @@ class TerminalProvider(BaseProvider):
             response_data = ""
         elif response in ["reject", "no", "n", "拒绝", "不同意"]:
             status = HumanLoopStatus.REJECTED
-            print("\n请输入拒绝原因:")
+            print("\nPlease enter the reason for rejection:")
             reason = await loop.run_in_executor(None, input)
             response_data = reason
         else:
-            print("\n无效的输入，请输入 approve 或 reject")
+            print("\nInvalid input, please enter 'approve' or 'reject'")
             # 递归调用处理审批交互
             await self._handle_approval_interaction(conversation_id, request_id, request_info)
             return
@@ -316,23 +306,3 @@ class TerminalProvider(BaseProvider):
         request_info["responded_at"] = datetime.now().isoformat()
         
         print("\n已记录您的回复")
-    
-    def _format_context(self, context: Dict[str, Any]) -> str:
-        """格式化上下文信息为字符串
-        
-        Args:
-            context: 上下文信息
-            
-        Returns:
-            str: 格式化后的字符串
-        """
-        # 如果上下文是字符串，直接返回
-        if isinstance(context, str):
-            return context
-            
-        # 如果上下文包含 "message" 字段，优先使用它
-        if "message" in context:
-            return context["message"]
-            
-        # 否则将整个上下文转换为 JSON 字符串
-        return json.dumps(context, indent=2, ensure_ascii=False)

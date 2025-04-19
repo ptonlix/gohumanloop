@@ -63,7 +63,7 @@ class HumanLoopProvider(Protocol):
     """Human-in-the-loop Provider Protocol"""
     
     name: str  # 提供者名称
-    
+
     @abstractmethod
     async def request_humanloop(
         self,
@@ -408,5 +408,20 @@ class HumanLoopManager(ABC):
             
         Raises:
             ValueError: 如果指定的提供者不存在
+        """
+        pass
+
+    @abstractmethod
+    async def check_conversation_exist(
+        self,
+        task_id: str,
+        conversation_id: str,
+    ) -> HumanLoopResult:
+        """检查对话状态
+        
+        Args:
+            conversation_id: 对话标识符
+        Returns:
+            HumanLoopResult: 包含对话最新请求的状态
         """
         pass

@@ -49,6 +49,7 @@ class LangGraphAdapter:
         task_id: Optional[str] = None,
         conversation_id: Optional[str] = None,
         ret_key: str = "approval_result",
+        additional: Optional[str] = "",
         timeout: Optional[int] = None,
         execute_on_reject: bool = False,
         callback: Optional[Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]] = None,
@@ -60,7 +61,7 @@ class LangGraphAdapter:
             conversation_id = str(uuid.uuid4())
             
         def decorator(fn):
-            return self._approve_cli(fn, task_id, conversation_id, ret_key, timeout, execute_on_reject, callback)
+            return self._approve_cli(fn, task_id, conversation_id, ret_key, additional, timeout, execute_on_reject, callback)
         return HumanLoopWrapper(decorator)
 
     def _approve_cli(
@@ -69,6 +70,7 @@ class LangGraphAdapter:
         task_id: str,
         conversation_id: str,
         ret_key: str = "approval_result",
+        additional: Optional[str] = "",
         timeout: Optional[int] = None,
         execute_on_reject: bool = False,
         callback: Optional[Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]] = None,
@@ -103,15 +105,16 @@ class LangGraphAdapter:
                 task_id=task_id,
                 conversation_id=conversation_id,
                 loop_type=HumanLoopType.APPROVAL,
-                context={ #TODO: 后续可以使用Prompt利用大模型来生成友好的审批模板
-                    "function": fn.__name__,
-                    "signature": str(fn.__code__.co_varnames),
-                    "args": str(args),
-                    "kwargs": str(kwargs),
-                    "doc": fn.__doc__ or "No documentation available",
-                    "question": f"""
-Please review and approve/reject this function execution.
-"""
+                context={
+                    "message": f"""
+Function Name: {fn.__name__}
+Function Signature: {str(fn.__code__.co_varnames)}
+Arguments: {str(args)}
+Keyword Arguments: {str(kwargs)}
+Documentation: {fn.__doc__ or "No documentation available"}
+""",
+                    "question": "Please review and approve/reject this human loop execution.",
+                    "additional": additional
                 },
                 callback=cb,
                 timeout=timeout or self.default_timeout,
@@ -165,11 +168,142 @@ Please review and approve/reject this function execution.
             return async_wrapper # type: ignore
         return sync_wrapper
 
+    def require_conversation(
+        self,
+        task_id: Optional[str] = None,
+        conversation_id: Optional[str] = None,
+        state_key: str = "conv_info",
+        ret_key: str = "conv_result",
+        additional: Optional[str] = "",
+        timeout: Optional[int] = None,
+        callback: Optional[Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]] = None,
+    ) -> HumanLoopWrapper:
+        """多轮对话场景装饰器"""
+
+        if task_id is None:
+            task_id = str(uuid.uuid4())
+        if conversation_id is None:
+            conversation_id = str(uuid.uuid4())
+
+        def decorator(fn):
+            return self._conversation_cli(fn, task_id, conversation_id, state_key, ret_key, additional, timeout, callback)
+        return HumanLoopWrapper(decorator)
+
+    def _conversation_cli(
+        self,
+        fn: Callable[[T], R],
+        task_id: str,
+        conversation_id: str,
+        state_key: str = "conv_info",
+        ret_key: str = "conv_result",
+        additional: Optional[str] = "",
+        timeout: Optional[int] = None,
+        callback: Optional[Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]] = None,
+    ) -> Callable[[T], R | None]:
+        """多轮对话场景的内部实现装饰器"""
+
+        @wraps(fn)
+        async def async_wrapper(*args, **kwargs) -> R | None:
+            # 判断 callback 是实例还是工厂函数
+            cb = None
+            state = args[0] if args else None
+            if callable(callback) and not isinstance(callback, HumanLoopCallback):
+                cb = callback(state)
+            else:
+                cb = callback
+
+            node_input = None
+            if state:
+                # 从State中关键字段获取输入信息
+                node_input = state.get(state_key, {})
+
+            # 组合提问内容
+            question_content = f"Please respond to the following information:\n{node_input}"
+            
+            # 检查是否已存在对话，决定使用request_humanloop还是continue_humanloop
+            conversation_requests = await self.manager.check_conversation_exist(task_id, conversation_id)
+            
+            result = None
+            if conversation_requests:
+                # 已存在对话，使用continue_humanloop
+                result = await self.manager.continue_humanloop(
+                    conversation_id=conversation_id,
+                    context={
+                        "message": f"""
+Function Name: {fn.__name__}
+Function Signature: {str(fn.__code__.co_varnames)}
+Arguments: {str(args)}
+Keyword Arguments: {str(kwargs)}
+Documentation: {fn.__doc__ or "No documentation available"}
+""",
+                        "question": question_content,
+                        "additional": additional
+                    },
+                    timeout=timeout or self.default_timeout,
+                    callback=cb,
+                    blocking=True
+                )
+            else:
+                # 新对话，使用request_humanloop
+                result = await self.manager.request_humanloop(
+                    task_id=task_id,
+                    conversation_id=conversation_id,
+                    loop_type=HumanLoopType.CONVERSATION,
+                    context={
+                        "message": f"""
+Function Name: {fn.__name__}
+Function Signature: {str(fn.__code__.co_varnames)}
+Arguments: {str(args)}
+Keyword Arguments: {str(kwargs)}
+Documentation: {fn.__doc__ or "No documentation available"}
+""",
+                        "question": question_content,
+                        "additional": additional
+                    },
+                    timeout=timeout or self.default_timeout,
+                    callback=cb,
+                    blocking=True
+                )
+
+            # 初始化对话结果对象为None
+            conversation_info = None
+
+            if isinstance(result, HumanLoopResult):
+                conversation_info = {
+                    'conversation_id': result.conversation_id,
+                    'request_id': result.request_id,
+                    'loop_type': result.loop_type,
+                    'status': result.status,
+                    'response': result.response,
+                    'feedback': result.feedback,
+                    'responded_by': result.responded_by,
+                    'responded_at': result.responded_at,
+                    'error': result.error
+                }
+
+            kwargs[ret_key] = conversation_info
+
+            if isinstance(result, HumanLoopResult):
+                if iscoroutinefunction(fn):
+                    return await fn(*args, **kwargs)
+                return fn(*args, **kwargs)
+            else:
+                raise ValueError(f"Conversation request timeout or error for {fn.__name__}")
+
+        @wraps(fn)
+        def sync_wrapper(*args, **kwargs) -> R | None:
+            return asyncio.run(async_wrapper(*args, **kwargs))
+
+        if iscoroutinefunction(fn):
+            return async_wrapper # type: ignore
+        return sync_wrapper
+
     def require_info(
         self,
         task_id: Optional[str] = None,
         conversation_id: Optional[str] = None,
         ret_key: str = "info_result",
+        additional: Optional[str] = "",
         timeout: Optional[int] = None,
         callback: Optional[Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]] = None,
     ) -> HumanLoopWrapper:
@@ -181,7 +315,7 @@ Please review and approve/reject this function execution.
             conversation_id = str(uuid.uuid4())
 
         def decorator(fn):
-            return self._get_info_cli(fn, task_id, conversation_id, ret_key, timeout, callback)
+            return self._get_info_cli(fn, task_id, conversation_id, ret_key, additional, timeout, callback)
         return HumanLoopWrapper(decorator)
 
     def _get_info_cli(
@@ -190,6 +324,7 @@ Please review and approve/reject this function execution.
         task_id: str,
         conversation_id: str,
         ret_key: str = "info_result",
+        additional: Optional[str] = "",
         timeout: Optional[int] = None,
         callback: Optional[Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]] = None,
     ) -> Callable[[T], R | None]:
@@ -234,15 +369,16 @@ Please review and approve/reject this function execution.
                 task_id=task_id,
                 conversation_id=conversation_id,
                 loop_type=HumanLoopType.INFORMATION,
-                context={ #TODO: 后续可以使用Prompt利用大模型来生成友好的审批模板
-                    "function": fn.__name__,
-                    "signature": str(fn.__code__.co_varnames),
-                    "args": str(args),
-                    "kwargs": str(kwargs),
-                    "doc": fn.__doc__ or "No documentation available",
-                    "question": f"""
-Please provide the required information for this function.
-"""
+                context={
+                    "message": f"""
+Function Name: {fn.__name__}
+Function Signature: {str(fn.__code__.co_varnames)}
+Arguments: {str(args)}
+Keyword Arguments: {str(kwargs)}
+Documentation: {fn.__doc__ or "No documentation available"}
+""",
+                    "question": "Please provide the required information for the human loop",
+                    "additional": additional
                 },
                 timeout=timeout or self.default_timeout,
                 callback=cb,

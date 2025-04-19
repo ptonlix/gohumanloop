@@ -184,7 +184,7 @@ class DefaultHumanLoopManager(HumanLoopManager):
         result = await provider.check_request_status(conversation_id, request_id)
         
         # 如果有回调且状态不是等待或进行中，触发状态更新回调
-        if (conversation_id, request_id) in self._callbacks and result.status not in [HumanLoopStatus.PENDING, HumanLoopStatus.INPROGRESS]:
+        if (conversation_id, request_id) in self._callbacks and result.status not in [HumanLoopStatus.PENDING]:
             await self._trigger_update_callback(conversation_id, request_id, provider, result)
             
         return result
@@ -362,8 +362,8 @@ class DefaultHumanLoopManager(HumanLoopManager):
         while True:
             result = await provider.check_request_status(conversation_id, request_id)
             
-            # 如果状态是最终状态（非PENDING和INPROGRESS），返回结果
-            if result.status != HumanLoopStatus.PENDING and result.status != HumanLoopStatus.INPROGRESS:
+            # 如果状态是最终状态（非PENDING），返回结果
+            if result.status != HumanLoopStatus.PENDING:
                 if (conversation_id, request_id) in self._callbacks:
                     await self._trigger_update_callback(conversation_id, request_id, provider,result)
                 return result
@@ -422,3 +422,25 @@ class DefaultHumanLoopManager(HumanLoopManager):
             Optional[str]: 关联的任务ID，如果不存在则返回None
         """
         return self._request_task.get((conversation_id, request_id))
+
+    async def check_conversation_exist(
+        self,
+        task_id:str,
+        conversation_id: str,
+    ) -> bool:
+        """判断对话是否已存在
+        
+        Args:
+            conversation_id: 对话标识符
+            provider_id: 使用特定提供者的ID（可选）
+            
+        Returns:
+            bool: 如果对话存在返回True，否则返回False
+        """
+        # 检查task_id是否存在且conversation_id是否在该task的对话集合中
+        if task_id in self._task_conversations and conversation_id in self._task_conversations[task_id]:
+            # 进一步验证该对话是否有关联的请求
+            if conversation_id in self._conversation_requests and self._conversation_requests[conversation_id]:
+                return True
+
+        return False
