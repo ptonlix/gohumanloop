@@ -3,7 +3,10 @@ from functools import wraps
 import asyncio
 import uuid
 from inspect import iscoroutinefunction
+import importlib
+import time
 
+from gohumanloop.utils import run_async_safely
 from gohumanloop.core.interface import (
     HumanLoopManager, HumanLoopResult, HumanLoopStatus, HumanLoopType, HumanLoopCallback, HumanLoopProvider
 )
@@ -11,6 +14,30 @@ from gohumanloop.core.interface import (
 # Define TypeVars for input and output types
 T = TypeVar("T")
 R = TypeVar('R')
+
+# 检查LangGraph版本
+def _check_langgraph_version():
+    """检查LangGraph版本，判断是否支持interrupt功能"""
+    try:
+        import importlib.metadata
+        version = importlib.metadata.version("langgraph")
+        version_parts = version.split('.')
+        major, minor, patch = int(version_parts[0]), int(version_parts[1]), int(version_parts[2])
+        
+        # 从0.2.57版本开始支持interrupt
+        return (major > 0 or (major == 0 and (minor > 2 or (minor == 2 and patch >= 57))))
+    except (importlib.metadata.PackageNotFoundError, ValueError, IndexError):
+        # 如果无法确定版本，假设不支持
+        return False
+
+# 根据版本导入相应功能
+_SUPPORTS_INTERRUPT = _check_langgraph_version()
+if _SUPPORTS_INTERRUPT:
+    try:
+        from langgraph.types import interrupt as _lg_interrupt
+        from langgraph.types import Command as _lg_Command
+    except ImportError:
+        _SUPPORTS_INTERRUPT = False
 
 class HumanLoopWrapper:
     def __init__(
@@ -28,11 +55,10 @@ class HumanLoopWrapper:
 class LangGraphAdapter:
     """LangGraph适配器，用于简化人机循环集成
     
-    提供四种场景的装饰器:
+    提供三种场景的装饰器:
     - require_approval: 需要人工审批
     - require_info: 需要人工提供信息
     - require_conversation: 需要进行多轮对话
-    - require_human: 通用人机交互
     """
 
     def __init__(
@@ -161,7 +187,7 @@ Documentation: {fn.__doc__ or "No documentation available"}
 
         @wraps(fn)
         def sync_wrapper(*args, **kwargs) -> R | None:
-            return asyncio.run(async_wrapper(*args, **kwargs))
+            return run_async_safely(async_wrapper(*args, **kwargs))
 
         # 根据被装饰函数类型返回对应的wrapper
         if iscoroutinefunction(fn):
@@ -292,7 +318,7 @@ Documentation: {fn.__doc__ or "No documentation available"}
 
         @wraps(fn)
         def sync_wrapper(*args, **kwargs) -> R | None:
-            return asyncio.run(async_wrapper(*args, **kwargs))
+            return run_async_safely(async_wrapper(*args, **kwargs))
 
         if iscoroutinefunction(fn):
             return async_wrapper # type: ignore
@@ -415,7 +441,7 @@ Documentation: {fn.__doc__ or "No documentation available"}
 
         @wraps(fn)
         def sync_wrapper(*args, **kwargs) -> R | None:
-            return asyncio.run(async_wrapper(*args, **kwargs))
+           return run_async_safely(async_wrapper(*args, **kwargs))
 
         # 根据被装饰函数类型返回对应的wrapper
         if iscoroutinefunction(fn):
@@ -518,3 +544,91 @@ def default_langgraph_callback_factory(state: Any) -> LangGraphHumanLoopCallback
         on_timeout=on_timeout,
         on_error=on_error
     )
+
+from gohumanloop.core.manager import DefaultHumanLoopManager
+from gohumanloop.providers.terminal_provider import TerminalProvider
+
+# 创建 HumanLoopManager 实例
+manager = DefaultHumanLoopManager(initial_providers=TerminalProvider(name="LGDefaultProvider"))
+
+# 创建 LangGraphAdapter 实例
+default_adapter = LangGraphAdapter(manager, default_timeout=60)
+
+default_conversation_id = str(uuid.uuid4())
+
+# 修改 interrupt 函数
+def interrupt(value: Any, lg_humanloop: LangGraphAdapter = default_adapter) -> Any:
+    """
+    封装LangGraph的interrupt功能，用于中断图执行并等待人工输入
+    
+    如果LangGraph版本不支持interrupt，将抛出RuntimeError
+    
+    参数:
+        value: 任何可JSON序列化的值，将展示给人类用户
+        lg_humanloop: LangGraphAdapter实例，默认使用全局实例
+        
+    返回:
+        人类用户提供的输入值
+    """
+    if not _SUPPORTS_INTERRUPT:
+        raise RuntimeError(
+            "LangGraph版本过低，不支持interrupt功能。请升级到0.2.57或更高版本。"
+            "可以使用: pip install --upgrade langgraph>=0.2.57"
+        )
+    
+    # 获取当前事件循环或创建新的
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        # 如果没有事件循环，创建一个新的
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    loop.create_task(lg_humanloop.manager.request_humanloop(
+        task_id="lg_interrupt",
+        conversation_id=default_conversation_id,
+        loop_type=HumanLoopType.INFORMATION,
+        context={
+            "message": f"{value}",
+            "question": "The execution has been interrupted. Please review the above information and provide your input to continue.",
+        },
+        blocking=False,
+    ))
+    
+    # 返回LangGraph的interrupt
+    return _lg_interrupt(value)
+
+# 修改 create_resume_command 函数
+def create_resume_command(lg_humanloop: LangGraphAdapter = default_adapter) -> Any:
+    """
+    创建用于恢复被中断图执行的Command对象
+    
+    如果LangGraph版本不支持Command，将抛出RuntimeError
+    
+    参数:
+        lg_humanloop: LangGraphAdapter实例，默认使用全局实例
+        
+    返回:
+        Command对象，可用于graph.invoke方法
+    """
+    if not _SUPPORTS_INTERRUPT:
+        raise RuntimeError(
+            "LangGraph版本过低，不支持Command功能。请升级到0.2.57或更高版本。"
+            "可以使用: pip install --upgrade langgraph>=0.2.57"
+        )
+
+    # 定义异步轮询函数
+    async def poll_for_result():
+        poll_interval = 1.0  # 轮询间隔（秒）
+        while True:
+            result = await lg_humanloop.manager.check_conversation_status(default_conversation_id)
+            # 如果状态是最终状态（非PENDING），返回结果
+            if result.status != HumanLoopStatus.PENDING:
+                return result.response
+            # 等待一段时间后再次轮询
+            await asyncio.sleep(poll_interval)
+    
+    # 同步等待异步结果
+    response = run_async_safely(poll_for_result())
+    return _lg_Command(resume=response)
+    

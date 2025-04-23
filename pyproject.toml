@@ -1,15 +1,29 @@
 [project]
 name = "gohumanloop"
 version = "0.1.0"
-description = "Add your description here"
+description = "Perfecting AI workflows with human intelligence"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "aiohttp>=3.11.16",
     "click>=8.1.8",
     "dotenv>=0.9.9",
-    "websockets>=15.0.1",
 ]
+
+[project.urls]
+repository = "https://github.com/ptonlix/gohumanloop"
+
+[project.scripts]
+ghl = "gohumanloop.cli.main:cli"
+gohumanloop = "gohumanloop.cli.main:cli"
+
+[project.optional-dependencies]
+email = [
+    "imapclient>=3.0.1",
+]
+
+[tool.setuptools]
+packages = ["gohumanloop"]
 
 [dependency-groups]
 dev = [
