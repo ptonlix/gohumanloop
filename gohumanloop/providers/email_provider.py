@@ -12,6 +12,7 @@ import logging
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
 from pydantic import SecretStr
+from pydantic_core.core_schema import str_schema
 
 from gohumanloop.core.interface import ( HumanLoopResult, HumanLoopStatus, HumanLoopType
 )
@@ -313,27 +314,40 @@ class EmailProvider(BaseProvider):
             "message_id": email_msg.get("Message-ID", "")
         }
         
+        # 提取用户的实际回复内容
+        user_content = self._extract_user_reply_content(body)
+        logger.debug(f"user_content:\n {user_content}")
         # 根据不同的循环类型解析回复
         if loop_type == HumanLoopType.APPROVAL:
             # 解析审批决定和理由
             decision = None
             reason = None
             
-            for line in body.split('\n'):
-                line = line.strip()
-                if line.startswith("决定"):
-                    decision_text = line[3:].strip().lower()
-                    if "批准" in decision_text or "同意" in decision_text or "approve" in decision_text:
-                        decision = "approved"
-                        break
-                    elif "拒绝" in decision_text or "否决" in decision_text or "reject" in decision_text:
-                        decision = "rejected"
-                    else:
-                        decision = "rejected"
-                        reason = "未提供有效的审批决定"
-                elif line.startswith("理由"):
-                    reason = line[3:].strip()
+            # 定义审批关键词映射
+            approve_keywords = {"批准", "同意", "approve"}
+            reject_keywords = {"拒绝", "否决", "reject"}
             
+            # 遍历每行内容寻找决定信息
+            for line in map(str.strip, user_content.split('\n')):
+                if not line.startswith("决定"):
+                    continue
+                    
+                decision_text = line[3:].strip().lower()
+                
+                # 判断决定类型
+                if any(keyword in decision_text for keyword in approve_keywords):
+                    decision = "approved"
+                elif any(keyword in decision_text for keyword in reject_keywords):
+                    decision = "rejected"
+                else:
+                    decision = "rejected"
+                    reason = "未提供有效的审批决定"
+                    break
+                
+                # 提取理由
+                if "理由" in line:
+                    reason = line[line.find("理由") + 2:].strip()
+                break
             parsed_response["decision"] = decision
             parsed_response["reason"] = reason
             
@@ -349,7 +363,7 @@ class EmailProvider(BaseProvider):
             # 解析提供的信息和备注
             information = None
             
-            for line in body.split('\n'):
+            for line in user_content.split('\n'):
                 line = line.strip()
                 if line.startswith("信息"):
                     information = line[3:].strip()
@@ -359,8 +373,6 @@ class EmailProvider(BaseProvider):
             status = HumanLoopStatus.COMPLETED
             
         elif loop_type == HumanLoopType.CONVERSATION:
-            # 改进的对话结束检测逻辑
-            user_content = self._extract_user_reply_content(body)
             
             # 检查用户的实际回复内容中是否包含结束对话的标记
             if user_content and "[结束对话]" in user_content:
@@ -385,12 +397,14 @@ class EmailProvider(BaseProvider):
             self._timeout_tasks[request_key].cancel()
             del self._timeout_tasks[request_key]
             
-    def _format_email_body(self, body: str, loop_type: HumanLoopType) -> Tuple[str, str]:
+    def _format_email_body(self, body: str, loop_type: HumanLoopType, subject: str) -> Tuple[str, str]:
         """Format email body
         
         Args:
             body: Email body content
             loop_type: Loop type
+            conversation_id: Conversation ID (optional)
+            request_id: Request ID (optional)
             
         Returns:
             Tuple[str, str]: (Plain text body, HTML body)
@@ -401,13 +415,23 @@ class EmailProvider(BaseProvider):
         # 根据不同的循环类型添加回复指导
         if loop_type == HumanLoopType.APPROVAL:
             text_body += "\n\n请按以下格式回复：\n"
+            text_body += "===== 请保留此行作为内容开始标记 =====\n"
             text_body += "决定：[批准/拒绝]\n"
             text_body += "理由：[您的理由]\n"
+            text_body += "===== 请保留此行作为内容结束标记 =====\n"
         elif loop_type == HumanLoopType.INFORMATION:
             text_body += "\n\n请按以下格式回复：\n"
+            text_body += "===== 请保留此行作为内容开始标记 =====\n"
             text_body += "信息：[您提供的信息]\n"
+            text_body += "===== 请保留此行作为内容结束标记 =====\n"
         elif loop_type == HumanLoopType.CONVERSATION:
             text_body += "\n\n请直接回复您的内容。如需结束对话，请在回复中包含\"[结束对话]\"。\n"
+            text_body += "===== 请保留此行作为内容开始标记 =====\n"
+            text_body += "[请在此处输入您的回复内容]\n"
+            text_body += "===== 请保留此行作为内容结束标记 =====\n"
+
+        # 添加纯文本版本的宣传标识
+        text_body += "\n\n---\n由 GoHumanLoop 提供支持 - Perfecting AI workflows with human intelligence\n"
         
         # 构建HTML正文
         html_body = ["<html><body>"]
@@ -443,20 +467,79 @@ class EmailProvider(BaseProvider):
             
             if loop_type == HumanLoopType.APPROVAL:
                 html_body.append("<p><strong>请按以下格式回复：</strong></p>")
-                html_body.append("<pre style='background-color: #ffffff; padding: 8px; border: 1px solid #ddd;'>")
-                html_body.append("决定：[批准/拒绝]<br>")
-                html_body.append("理由：[您的理由]")
-                html_body.append("</pre>")
+                # 添加预格式化回复模板
+                html_body.append(f"""
+<div style="margin-top: 15px;">
+    <div style="background-color: #f8f9fa; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+        <p style="margin: 0 0 10px 0; font-weight: bold;">批准模板：</p>
+        <pre style="background-color: #ffffff; padding: 10px; border: 1px solid #eee; margin: 0 0 15px 0;">
+===== 请保留此行作为内容开始标记 =====
+决定：批准
+理由：[请在此处填写您的理由]
+===== 请保留此行作为内容结束标记 =====</pre>
+        
+        <p style="margin: 0 0 10px 0; font-weight: bold;">拒绝模板：</p>
+        <pre style="background-color: #ffffff; padding: 10px; border: 1px solid #eee; margin: 0;">
+===== 请保留此行作为内容开始标记 =====
+决定：拒绝
+理由：[请在此处填写您的理由]
+===== 请保留此行作为内容结束标记 =====</pre>
+    </div>
+    <p style="margin-top: 10px; font-size: 12px; color: #666;">
+        请选择一个模板，复制到您的回复中，替换方括号内的内容后发送。请保留标记行，这将帮助系统准确识别您的回复。
+    </p>
+</div>
+""")
             elif loop_type == HumanLoopType.INFORMATION:
                 html_body.append("<p><strong>请按以下格式回复：</strong></p>")
-                html_body.append("<pre style='background-color: #ffffff; padding: 8px; border: 1px solid #ddd;'>")
-                html_body.append("信息：[您提供的信息]<br>")
-                html_body.append("</pre>")
+                html_body.append(f"""
+<div style="margin-top: 15px;">
+    <div style="background-color: #f8f9fa; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+        <p style="margin: 0 0 10px 0; font-weight: bold;">信息提供模板：</p>
+        <pre style="background-color: #ffffff; padding: 10px; border: 1px solid #eee; margin: 0;">
+===== 请保留此行作为内容开始标记 =====
+信息：[请在此处填写您提供的信息]
+===== 请保留此行作为内容结束标记 =====</pre>
+    </div>
+    <p style="margin-top: 10px; font-size: 12px; color: #666;">
+        请复制上面的模板到您的回复中，替换方括号内的内容后发送。请保留标记行，这将帮助系统准确识别您的回复。
+    </p>
+</div>
+""")
             elif loop_type == HumanLoopType.CONVERSATION:
-                html_body.append("<p><strong>请直接回复您的内容。如需结束对话，请在回复中包含\"[结束对话]\"。</strong></p>")
-            
+                html_body.append("<p><strong>请按以下格式回复：如需结束对话，请在回复中包含\"[结束对话]\"。</strong></p>")
+                
+                # 添加预格式化回复模板
+                html_body.append(f"""
+<div style="margin-top: 15px;">
+    <div style="background-color: #f8f9fa; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+        <p style="margin: 0 0 10px 0; font-weight: bold;">继续对话模板：</p>
+        <pre style="background-color: #ffffff; padding: 10px; border: 1px solid #eee; margin: 0 0 15px 0;">
+===== 请保留此行作为内容开始标记 =====
+[请在此处输入您的回复内容]
+===== 请保留此行作为内容结束标记 =====</pre>
+        <p style="margin: 0 0 10px 0; font-weight: bold;">结束对话模板：</p>
+        <pre style="background-color: #ffffff; padding: 10px; border: 1px solid #eee; margin: 0;">
+===== 请保留此行作为内容开始标记 =====
+[请在此处输入您的回复内容]
+[结束对话]
+===== 请保留此行作为内容结束标记 =====</pre>
+    </div>
+    <p style="margin-top: 10px; font-size: 12px; color: #666;">
+        请选择一个模板，复制到您的回复中，替换方括号内的内容后发送。请保留标记行，这将帮助系统准确识别您的回复。
+    </p>
+</div>
+""")
+        
             html_body.append("</div>")
         
+        # 添加 GoHumanLoop 宣传标识
+        html_body.append("<hr style='margin-top: 20px; margin-bottom: 10px;'>")
+        html_body.append("<div style='text-align: center; color: #666; font-size: 12px; margin-bottom: 10px;'>")
+        html_body.append("<p>由 <strong style='color: #007bff;'>GoHumanLoop</strong> 提供支持</p>")
+        html_body.append("<p style='font-style: italic;'>Perfecting AI workflows with human intelligence</p>")
+        html_body.append("</div>")
+
         html_body.append("</body></html>")
         
         return text_body, "\n".join(html_body)
@@ -526,7 +609,7 @@ class EmailProvider(BaseProvider):
             color=False
         )
 
-        body, html_body = self._format_email_body(prompt, loop_type)
+        body, html_body = self._format_email_body(prompt, loop_type, subject)
         
        
         
@@ -704,7 +787,7 @@ class EmailProvider(BaseProvider):
             color=False
         )
 
-        body, html_body = self._format_email_body(prompt, HumanLoopType.CONVERSATION)
+        body, html_body = self._format_email_body(prompt, HumanLoopType.CONVERSATION, subject)
 
         # 发送邮件
         success = await self._send_email(
@@ -804,6 +887,16 @@ class EmailProvider(BaseProvider):
         Returns:
             str: User's actual reply content
         """
+        # 首先尝试使用标记提取内容
+        start_marker = "===== 请保留此行作为内容开始标记 ====="
+        end_marker = "===== 请保留此行作为内容结束标记 ====="
+        
+        if start_marker in body and end_marker in body:
+            start_index = body.find(start_marker) + len(start_marker)
+            end_index = body.find(end_marker)
+            if start_index < end_index:
+                return body[start_index:end_index].strip()
+
         # 常见的邮件回复分隔符模式
         reply_patterns = [
             # 常见的邮件客户端引用标记
@@ -817,6 +910,7 @@ class EmailProvider(BaseProvider):
             r"_{5,}",                             # 分隔线
             r"\*{5,}",                            # 分隔线
             r"={5,}",                             # 分隔线
+            r"原始邮件",                           # 中文原始邮件
             r"请按以下格式回复：",                  # 我们自己的指导语
             r"请直接回复您的内容。如需结束对话，请在回复中包含",  # 我们自己的指导语
         ]
@@ -861,3 +955,50 @@ class EmailProvider(BaseProvider):
                 return "User didn't provide valid reply content"
             
             return user_content
+
+    def _generate_end_conversation_url(self, subject: str) -> str:
+        """生成结束对话的URL
+        
+        Args:
+            conversation_id: 对话ID
+            request_id: 请求ID
+            
+        Returns:
+            str: 结束对话的URL
+        """
+        # 创建一个特殊的mailto链接，自动填充主题和内容
+        body = "[结束对话]"
+        
+        # 对主题和内容进行URL编码
+        import urllib.parse
+        encoded_subject = urllib.parse.quote(subject)
+        encoded_body = urllib.parse.quote(body)
+        
+        # 构建mailto链接
+        return f"mailto:{self.sender_email}?subject={encoded_subject}&body={encoded_body}"
+
+    def _generate_approval_url(self, subject: str, decision: str) -> str:
+        """生成批准或拒绝的URL
+        
+        Args:
+            conversation_id: 对话ID
+            request_id: 请求ID
+            decision: 决定（approved或rejected）
+            
+        Returns:
+            str: 批准或拒绝的URL
+        """
+        # 创建一个特殊的mailto链接，自动填充主题和内容
+        # 根据决定设置不同的内容
+        if decision == "approved":
+            body = "决定：批准\n理由："
+        else:
+            body = "决定：拒绝\n理由："
+        
+        # 对主题和内容进行URL编码
+        import urllib.parse
+        encoded_subject = urllib.parse.quote(subject)
+        encoded_body = urllib.parse.quote(body)
+        
+        # 构建mailto链接
+        return f"mailto:{self.sender_email}?subject={encoded_subject}&body={encoded_body}"

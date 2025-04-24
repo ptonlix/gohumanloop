@@ -46,7 +46,7 @@ async def approval_example(provider):
         context=context,
         metadata={
             "recipient_email": os.environ.get("TEST_RECIPIENT_EMAIL", "your_email@example.com"),
-            "subject": f"[测试] 数据库架构变更审批请求"
+            "subject": f"[测试] 数据库架构变更审批请求 {str(uuid.uuid4())}"
         },
         timeout=3600  # 1小时超时
     )
@@ -102,7 +102,7 @@ async def information_example(provider):
         context=context,
         metadata={
             "recipient_email": os.environ.get("TEST_RECIPIENT_EMAIL", "your_email@example.com"),
-            "subject": "[测试] 请提供2024年季度销售数据"
+            "subject": f"[测试] 请提供2024年季度销售数据 {str(uuid.uuid4())}"
         },
         timeout=7200  # 2小时超时
     )
@@ -172,11 +172,19 @@ async def conversation_example(provider):
         
         if status.status not in [HumanLoopStatus.PENDING]:
             print(f"收到回复，状态: {status.status}")
-            if status.status == HumanLoopStatus.COMPLETED or status.status == HumanLoopStatus.INPROGRESS:
+            if status.status == HumanLoopStatus.INPROGRESS:
                 if status.response and "user_content" in status.response:
                     first_response = status.response["user_content"]
                     print(f"人类回复: {first_response[:100]}...")  # 只显示前100个字符
                     break
+
+            elif status.status == HumanLoopStatus.COMPLETED:
+                if status.response and "user_content" in status.response:
+                    first_response = status.response["user_content"]
+                    print(f"人类回复: {first_response[:100]}...")  # 只显示前100个字符
+                    print("对话已结束")
+                    return 
+
             elif status.status == HumanLoopStatus.ERROR:
                 print(f"发生错误: {status.error}")
                 return
