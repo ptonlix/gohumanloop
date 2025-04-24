@@ -274,7 +274,8 @@ async def main():
         smtp_port=smtp_port,
         imap_server=imap_server,
         imap_port=imap_port,
-        check_interval=30  # 每30秒检查一次邮件
+        check_interval=30,  # 每30秒检查一次邮件
+        language="en" # 支持中文模板切换
     )
     
     # 运行示例
