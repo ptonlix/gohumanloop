@@ -391,11 +391,11 @@ class BaseProvider(HumanLoopProvider, ABC):
 
         if context.get("message"):
             lines.append(f"\n{COLOR_TITLE}=== Main Context ==={COLOR_RESET}")
-            lines.append(str(context["message"]))
+            lines.append(json.dumps(context["message"], indent=2, ensure_ascii=False))
 
         if context.get("additional"):
             lines.append(f"\n{COLOR_TITLE}=== Additional Context ==={COLOR_RESET}")
-            lines.append(str(context["additional"]))
+            lines.append(json.dumps(context["additional"], indent=2, ensure_ascii=False))
 
         if metadata:
             lines.append(f"\n{COLOR_TITLE}=== Metadata ==={COLOR_RESET}")

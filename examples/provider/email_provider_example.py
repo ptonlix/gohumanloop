@@ -27,12 +27,15 @@ async def approval_example(provider):
     print("\n=== 审批场景示例 ===")
     
     # 构建上下文信息
-    context = {
+    context = { 
+        "message": {
         "操作": "数据库架构变更",
         "描述": "需要在用户表中添加新字段'user_preferences'，用于存储用户偏好设置",
         "影响": "此变更将导致系统停机约5分钟",
         "计划执行时间": "2023-12-15 03:00 UTC",
         "回滚计划": "如果出现问题，将通过备份恢复原始架构"
+        },
+        "question": "请审批该数据库架构变更",
     }
     
     # 发起审批请求
@@ -43,7 +46,7 @@ async def approval_example(provider):
         context=context,
         metadata={
             "recipient_email": os.environ.get("TEST_RECIPIENT_EMAIL", "your_email@example.com"),
-            "subject": f"[测试] 数据库架构变更审批请求{str(uuid.uuid4())}"
+            "subject": f"[测试] 数据库架构变更审批请求"
         },
         timeout=3600  # 1小时超时
     )
@@ -82,10 +85,13 @@ async def information_example(provider):
     
     # 构建上下文信息
     context = {
+        "message":{
         "项目": "年度市场调研报告",
         "需要信息": "请提供2023年第四季度的销售数据和客户反馈摘要",
         "用途": "此信息将用于完成年度市场分析报告",
         "截止日期": "2023-12-20"
+         },
+        "question": "请提供2024年季度销售数据"
     }
     
     # 发起信息请求
@@ -96,7 +102,7 @@ async def information_example(provider):
         context=context,
         metadata={
             "recipient_email": os.environ.get("TEST_RECIPIENT_EMAIL", "your_email@example.com"),
-            "subject": "[测试] 请提供季度销售数据"
+            "subject": "[测试] 请提供2024年季度销售数据"
         },
         timeout=7200  # 2小时超时
     )
@@ -119,8 +125,6 @@ async def information_example(provider):
                 if status.response:
                     if "information" in status.response:
                         print(f"提供的信息: {status.response['information']}")
-                    if "notes" in status.response:
-                        print(f"备注: {status.response['notes']}")
             elif status.status == HumanLoopStatus.ERROR:
                 print(f"发生错误: {status.error}")
             break
@@ -135,9 +139,11 @@ async def conversation_example(provider):
     
     # 初始上下文信息
     context = {
+        "message":{
         "主题": "产品功能讨论",
         "背景": "我们正在开发一个新的电子商务平台，需要讨论几个关键功能的实现方案",
-        "问题": "您认为我们应该优先实现哪些功能？请提供您的建议和理由。"
+        },
+        "question": "请提供您的建议和理由。"
     }
     
     # 发起对话
@@ -148,7 +154,7 @@ async def conversation_example(provider):
         context=context,
         metadata={
             "recipient_email": os.environ.get("TEST_RECIPIENT_EMAIL", "your_email@example.com"),
-            "subject": "[测试] 产品功能讨论"
+            "subject": f"[测试] 产品功能讨论 {str(uuid.uuid4())}"
         }
     )
     
@@ -164,11 +170,11 @@ async def conversation_example(provider):
             request_id=result.request_id
         )
         
-        if status.status not in [HumanLoopStatus.PENDING, HumanLoopStatus.INPROGRESS]:
+        if status.status not in [HumanLoopStatus.PENDING]:
             print(f"收到回复，状态: {status.status}")
             if status.status == HumanLoopStatus.COMPLETED or status.status == HumanLoopStatus.INPROGRESS:
-                if status.response and "text" in status.response:
-                    first_response = status.response["text"]
+                if status.response and "user_content" in status.response:
+                    first_response = status.response["user_content"]
                     print(f"人类回复: {first_response[:100]}...")  # 只显示前100个字符
                     break
             elif status.status == HumanLoopStatus.ERROR:
@@ -181,8 +187,11 @@ async def conversation_example(provider):
     if first_response:
         # 构建新的上下文，包含对第一轮回复的响应
         follow_up_context = {
+            "message":{
             "上一轮讨论": first_response[:100] + "...",  # 简化显示
             "后续问题": "感谢您的建议！关于您提到的功能，您认为实现这些功能的最大挑战是什么？我们应该如何克服这些挑战？"
+            },
+            "question": "请继续讨论。"
         }
         
         # 继续对话
@@ -204,20 +213,37 @@ async def conversation_example(provider):
                 request_id=continue_result.request_id
             )
             
-            if status.status not in [HumanLoopStatus.PENDING, HumanLoopStatus.INPROGRESS]:
-                print(f"收到第二轮回复，状态: {status.status}")
-                if status.status == HumanLoopStatus.COMPLETED or status.status == HumanLoopStatus.INPROGRESS:
-                    if status.response and "text" in status.response:
-                        print(f"人类回复: {status.response['text'][:100]}...")  # 只显示前100个字符
+            if status.status not in [HumanLoopStatus.PENDING]:
+                print(f"收到回复，状态: {status.status}")
+                if status.status == HumanLoopStatus.INPROGRESS:
+                    if status.response and "user_content" in status.response:
+                        follow_response = status.response["user_content"]
+                        print(f"人类回复: {follow_response[:100]}...")  # 只显示前100个字符
+                        print("可以继续对话")
+                        # 构建新的上下文，包含对第一轮回复的响应
+                        follow_up_context = {
+                            "message":{
+                            "上一轮讨论": follow_response[:100] + "...",  # 简化显示
+                            "后续问题": "感谢您的建议！关于您提到的功能，您还有什么补充的吗？"
+                            },
+                            "question": "请继续讨论。"
+                        }
                         
-                        # 检查是否结束对话
-                        if status.response.get("conversation_ended", False):
-                            print("对话已结束")
-                        else:
-                            print("可以继续对话")
+                        # 继续对话
+                        continue_result = await provider.continue_humanloop(
+                            conversation_id=result.conversation_id,
+                            context=follow_up_context,
+                            metadata={
+                                "recipient_email": os.environ.get("TEST_RECIPIENT_EMAIL", "your_email@example.com")
+                            }
+                        )
+                elif status.status == HumanLoopStatus.COMPLETED:
+                    follow_response = status.response["user_content"]
+                    print(f"人类回复: {follow_response[:100]}...")  # 只显示前100个字符
+                    print("对话已结束")
+                    break
                 elif status.status == HumanLoopStatus.ERROR:
                     print(f"发生错误: {status.error}")
-                break
             
             print("等待回复中...")
 

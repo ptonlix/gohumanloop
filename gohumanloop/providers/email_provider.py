@@ -1,4 +1,5 @@
 import os
+import re
 import asyncio
 import smtplib
 from imapclient import IMAPClient
@@ -200,7 +201,7 @@ class EmailProvider(BaseProvider):
         Args:
             subject: Email subject
             sender_email: Sender email address (optional filter)
-            
+           
         Returns:
             List[email.message.Message]: List of matching emails
         """
@@ -222,7 +223,7 @@ class EmailProvider(BaseProvider):
                 logger.warning(f"Failed to send IMAP ID command: {str(e)}")
             
             # 选择收件箱
-            client.select_folder("INBOX", readonly=True)
+            client.select_folder("INBOX")
              
             # 执行搜索
             messages = client.search("UNSEEN")
@@ -245,6 +246,9 @@ class EmailProvider(BaseProvider):
                 if (sender_email and sender_email not in from_header) or \
                 (subject and subject not in email_subject):
                     continue
+                
+                # 将邮件标记为已读
+                client.set_flags(uid, [b'\\Seen'])
                 return email_message
             return None
         
@@ -297,13 +301,14 @@ class EmailProvider(BaseProvider):
         # 获取请求信息
         request_info = self._requests[request_key]
         loop_type = request_info.get("loop_type", HumanLoopType.CONVERSATION)
-        responded_by  = self._decode_email_header(email_msg.get("From", "")) 
+        responded_by = self._decode_email_header(email_msg.get("From", ""))
+        
         # 解析响应内容
         parsed_response = {
             "text": body,
             "html": html_body,
             "subject": self._decode_email_header(email_msg.get("Subject", "")),
-            "from":  responded_by,
+            "from": responded_by,
             "date": self._decode_email_header(email_msg.get("Date", "")),
             "message_id": email_msg.get("Message-ID", "")
         }
@@ -343,25 +348,26 @@ class EmailProvider(BaseProvider):
         elif loop_type == HumanLoopType.INFORMATION:
             # 解析提供的信息和备注
             information = None
-            notes = None
             
             for line in body.split('\n'):
                 line = line.strip()
                 if line.startswith("信息"):
                     information = line[3:].strip()
-                elif line.startswith("备注"):
-                    notes = line[3:].strip()
+                    break
             
             parsed_response["information"] = information
-            parsed_response["notes"] = notes
             status = HumanLoopStatus.COMPLETED
             
         elif loop_type == HumanLoopType.CONVERSATION:
-            # 检查是否结束对话
-            if "[结束对话]" in body:
-                parsed_response["conversation_ended"] = True
+            # 改进的对话结束检测逻辑
+            user_content = self._extract_user_reply_content(body)
+            
+            # 检查用户的实际回复内容中是否包含结束对话的标记
+            if user_content and "[结束对话]" in user_content:
+                parsed_response["user_content"] = user_content
                 status = HumanLoopStatus.COMPLETED
             else:
+                parsed_response["user_content"] = user_content
                 status = HumanLoopStatus.INPROGRESS
         else:
             status = HumanLoopStatus.COMPLETED
@@ -400,7 +406,6 @@ class EmailProvider(BaseProvider):
         elif loop_type == HumanLoopType.INFORMATION:
             text_body += "\n\n请按以下格式回复：\n"
             text_body += "信息：[您提供的信息]\n"
-            text_body += "备注：[可选备注]\n"
         elif loop_type == HumanLoopType.CONVERSATION:
             text_body += "\n\n请直接回复您的内容。如需结束对话，请在回复中包含\"[结束对话]\"。\n"
         
@@ -446,7 +451,6 @@ class EmailProvider(BaseProvider):
                 html_body.append("<p><strong>请按以下格式回复：</strong></p>")
                 html_body.append("<pre style='background-color: #ffffff; padding: 8px; border: 1px solid #ddd;'>")
                 html_body.append("信息：[您提供的信息]<br>")
-                html_body.append("备注：[可选备注]")
                 html_body.append("</pre>")
             elif loop_type == HumanLoopType.CONVERSATION:
                 html_body.append("<p><strong>请直接回复您的内容。如需结束对话，请在回复中包含\"[结束对话]\"。</strong></p>")
@@ -499,17 +503,6 @@ class EmailProvider(BaseProvider):
         subject_prefix = metadata.get("subject_prefix", f"[{self.name}]")
         subject = metadata.get("subject", f"{subject_prefix} Task {task_id}")
         
-        # 如果是继续对话，使用相同的主题
-        if conversation_id in self._conversations:
-            conversation_info = self._get_conversation(conversation_id)
-            if conversation_info:
-                last_request_id = conversation_info.get("last_request_id")
-                last_request_key = (conversation_id, last_request_id)
-                if last_request_key in self._requests:
-                    last_metadata = self._requests[last_request_key].get("metadata", {})
-                    if "subject" in last_metadata:
-                        subject = last_metadata["subject"]
-
          # 存储请求信息
         self._store_request(
             conversation_id=conversation_id,
@@ -529,7 +522,8 @@ class EmailProvider(BaseProvider):
             loop_type=loop_type,
             created_at=datetime.now().isoformat(),
             context=context,
-            metadata=metadata
+            metadata=metadata,
+            color=False
         )
 
         body, html_body = self._format_email_body(prompt, loop_type)
@@ -680,13 +674,13 @@ class EmailProvider(BaseProvider):
         if conversation_id in self._conversations:
             conversation_info = self._get_conversation(conversation_id)
             if conversation_info:
-                last_request_id = conversation_info.get("last_request_id")
-                last_request_key = (conversation_id, last_request_id)
+                latest_request_id = conversation_info.get("latest_request_id")
+                last_request_key = (conversation_id, latest_request_id)
                 if last_request_key in self._requests:
                     last_metadata = self._requests[last_request_key].get("metadata", {})
                     if "subject" in last_metadata:
                         subject = last_metadata["subject"]
-
+                        metadata["subject"] = subject # 保持相同主题
         # 存储请求信息
         self._store_request(
             conversation_id=conversation_id,
@@ -800,3 +794,70 @@ class EmailProvider(BaseProvider):
                 
         # 调用父类方法取消对话
         return await super().cancel_conversation(conversation_id)
+
+    def _extract_user_reply_content(self, body: str) -> str:
+        """Extract the actual reply content from the email, excluding quoted original email content
+        
+        Args:
+            body: Email body text
+            
+        Returns:
+            str: User's actual reply content
+        """
+        # 常见的邮件回复分隔符模式
+        reply_patterns = [
+            # 常见的邮件客户端引用标记
+            r"On .* wrote:",                      # Gmail, Apple Mail 等
+            r"From: .*\n?Sent: .*\n?To: .*",      # Outlook
+            r"-{3,}Original Message-{3,}",        # 一些邮件客户端
+            r"From: [\w\s<>@.]+(\[mailto:[\w@.]+\])?\s+Sent:",  # Outlook 变体
+            r"在.*写道：",                         # 中文邮件客户端
+            r"发件人: .*\n?时间: .*\n?收件人: .*",  # 中文 Outlook
+            r">{3,}",                             # 多级引用
+            r"_{5,}",                             # 分隔线
+            r"\*{5,}",                            # 分隔线
+            r"={5,}",                             # 分隔线
+            r"请按以下格式回复：",                  # 我们自己的指导语
+            r"请直接回复您的内容。如需结束对话，请在回复中包含",  # 我们自己的指导语
+        ]
+        
+        # 合并所有模式
+        combined_pattern = "|".join(reply_patterns)
+        
+        # 尝试根据分隔符分割邮件内容
+        parts = re.split(combined_pattern, body, flags=re.IGNORECASE)
+        
+        if parts and len(parts) > 1:
+            # 第一部分通常是用户的回复
+            user_content = parts[0].strip()
+            
+            # 如果没有找到明确的分隔符，尝试基于行分析
+            lines = body.split('\n')
+            user_content_lines = []
+            
+            for line in lines:
+                # 跳过引用行（以 > 开头的行）
+                if line.strip().startswith('>'):
+                    continue
+                # 如果遇到可能的分隔符，停止收集
+                if any(re.search(pattern, line, re.IGNORECASE) for pattern in reply_patterns):
+                    break
+                user_content_lines.append(line)
+            
+            user_content = '\n'.join(user_content_lines).strip()
+            
+            # 清理用户内容中的多余换行符和空白
+            # 1. 将所有 \r\n 替换为 \n
+            user_content = user_content.replace('\r\n', '\n')
+            
+            # 2. 将连续的多个换行符替换为最多两个换行符
+            user_content = re.sub(r'\n{3,}', '\n\n', user_content)
+            
+            # 3. 去除开头和结尾的空白行
+            user_content = user_content.strip()
+            
+            # 4. 如果内容为空，返回一个友好的提示
+            if not user_content or user_content.isspace():
+                return "User didn't provide valid reply content"
+            
+            return user_content
