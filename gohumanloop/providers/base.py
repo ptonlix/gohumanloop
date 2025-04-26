@@ -5,6 +5,7 @@ import json
 import uuid
 from datetime import datetime
 from collections import defaultdict
+from gohumanloop.utils.threadsafedict import ThreadSafeDict
 
 from gohumanloop.core.interface import (
     HumanLoopProvider, HumanLoopResult, HumanLoopStatus, HumanLoopType
@@ -19,7 +20,7 @@ class BaseProvider(HumanLoopProvider, ABC):
         # 用户自定义名称，如果未提供则使用UUID
         self.name = name
         # 存储请求信息，使用 (conversation_id, request_id) 作为键
-        self._requests = {}
+        self._requests = ThreadSafeDict() # 使用线程安全字典存储请求信息
         # 存储对话信息，包括对话中的请求列表和最新请求ID
         self._conversations = {}
         # 用于快速查找对话中的请求

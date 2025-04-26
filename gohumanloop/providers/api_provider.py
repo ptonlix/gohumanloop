@@ -1,248 +1,693 @@
-import aiohttp
-from typing import Dict, Any, Optional
-import json
 import asyncio
-from datetime import datetime
+import logging
+from typing import Dict, Any, Optional
 
-from gohumanloop.providers.base import BaseProvider
+import aiohttp
+from pydantic import BaseModel, Field
+
 from gohumanloop.core.interface import (
     HumanLoopResult, HumanLoopStatus, HumanLoopType
 )
+from gohumanloop.providers.base import BaseProvider
+
+logger = logging.getLogger(__name__)
+
+# Define the data models for requests and responses
+class APIResponse(BaseModel):
+    """Base model for API responses"""
+    success: bool = Field(default=False, description="Whether the request was successful")
+    error: Optional[str] = Field(default=None, description="Error message if any")
+
+class HumanLoopRequestData(BaseModel):
+    """Model for human-in-the-loop request data"""
+    task_id: str = Field(description="Task identifier")
+    conversation_id: str = Field(description="Conversation identifier")
+    request_id: str = Field(description="Request identifier")
+    loop_type: str = Field(description="Type of loop")
+    context: Dict[str, Any] = Field(description="Context information provided to humans")
+    platform: str = Field(description="Platform being used, e.g. wechat, feishu")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+
+class HumanLoopStatusParams(BaseModel):
+    """Model for getting human-in-the-loop status parameters"""
+    conversation_id: str = Field(description="Conversation identifier")
+    request_id: str = Field(description="Request identifier")
+    platform: str = Field(description="Platform being used")
+
+class HumanLoopStatusResponse(APIResponse):
+    """Model for human-in-the-loop status response"""
+    status: str = Field(default="pending", description="Request status")
+    response: Optional[Any] = Field(default=None, description="Human response data")
+    feedback: Optional[Any] = Field(default=None, description="Feedback data")
+    responded_by: Optional[str] = Field(default=None, description="Responder information")
+    responded_at: Optional[str] = Field(default=None, description="Response timestamp")
+
+class HumanLoopCancelData(BaseModel):
+    """Model for canceling human-in-the-loop request"""
+    conversation_id: str = Field(description="Conversation identifier")
+    request_id: str = Field(description="Request identifier")
+    platform: str = Field(description="Platform being used")
+
+class HumanLoopCancelConversationData(BaseModel):
+    """Model for canceling entire conversation"""
+    conversation_id: str = Field(description="Conversation identifier")
+    platform: str = Field(description="Platform being used")
+
+class HumanLoopContinueData(BaseModel):
+    """Model for continuing human-in-the-loop interaction"""
+    conversation_id: str = Field(description="Conversation identifier")
+    request_id: str = Field(description="Request identifier")
+    task_id: str = Field(description="Task identifier")
+    context: Dict[str, Any] = Field(description="Context information provided to humans")
+    platform: str = Field(description="Platform being used")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
 class APIProvider(BaseProvider):
-    """通过API实现人机循环的提供者"""
+    """API-based human-in-the-loop provider that supports integration with third-party service platforms
     
-    def __init__(self, api_url: str, api_key: Optional[str] = None, **kwargs):
-        super().__init__(kwargs.get("config"))
-        self.api_url = api_url
-        self.api_key = api_key
-        self.headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}" if api_key else ""
-        }
+    This provider communicates with a central service platform via HTTP requests, where the service platform
+    handles specific third-party service integrations (such as WeChat, Feishu, DingTalk, etc.).
+    """
+    
+    def __init__(
+        self,
+        name: str,
+        api_base_url: str,
+        api_key: Optional[str] = None,
+        default_platform: Optional[str] = None,
+        request_timeout: int = 30,
+        poll_interval: int = 5,
+        max_retries: int = 3,
+        config: Optional[Dict[str, Any]] = None
+    ):
+        """Initialize API provider
         
+        Args:
+            name: Provider name
+            api_base_url: Base URL for API service
+            api_key: API authentication key (optional)
+            default_platform: Default platform to use (e.g. "wechat", "feishu")
+            request_timeout: API request timeout in seconds
+            poll_interval: Polling interval in seconds
+            max_retries: Maximum number of retry attempts
+            config: Additional configuration parameters
+        """
+        super().__init__(name, config)
+        self.api_base_url = api_base_url.rstrip('/')
+        self.api_key = api_key
+        self.default_platform = default_platform
+        self.request_timeout = request_timeout
+        self.poll_interval = poll_interval
+        self.max_retries = max_retries
+        
+        # Store the currently running polling tasks.
+        self._poll_tasks = {}
+        
+    def __str__(self) -> str:
+        """Returns a string description of this instance"""
+        base_str = super().__str__()
+        api_info = f"- API Provider: API-based human-in-the-loop implementation, connected to {self.api_base_url}\n"
+        if self.default_platform:
+            api_info += f"  Default Platform: {self.default_platform}\n"
+        return f"{api_info}{base_str}"
+        
+    async def _make_api_request(
+        self, 
+        endpoint: str, 
+        method: str = "POST", 
+        data: Optional[Dict[str, Any]] = None,
+        params: Optional[Dict[str, Any]] = None,
+        headers: Optional[Dict[str, Any]] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Make API request
+        
+        Args:
+            endpoint: API endpoint path
+            method: HTTP method (GET, POST, etc.)
+            data: Request body data
+            params: URL query parameters  
+            headers: Request headers
+            
+        Returns:
+            Dict[str, Any]: API response data
+            
+        Raises:
+            Exception: If API request fails
+        """
+        url = f"{self.api_base_url}/{endpoint.lstrip('/')}"
+        
+        # Prepare request headers
+        request_headers = {
+            "Content-Type": "application/json",
+        }
+        # Add authentication information
+        if self.api_key:
+            request_headers["X-API-Key"] = self.api_key
+            
+        # Merge custom headers
+        if headers:
+            request_headers.update(headers)
+            
+        # Prepare request data
+        json_data = None
+        if data:
+            json_data = data
+            
+        # Send request
+        for attempt in range(self.max_retries):
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.request(
+                        method=method,
+                        url=url,
+                        json=json_data,
+                        params=params,
+                        headers=request_headers,
+                        timeout=self.request_timeout
+                    ) as response:
+                        response_data = await response.json()
+                        # Check response status
+                        if response.status >= 400:
+                            error_msg = response_data.get("error", f"API request failed: {response.status}")
+                            logger.error(f"API request failed: {error_msg}")
+                            
+                            # Retry if not the last attempt
+                            if attempt < self.max_retries - 1:
+                                await asyncio.sleep(1 * (attempt + 1))  # Exponential backoff
+                                continue
+                                
+                            raise Exception(error_msg)
+                            
+                        return response_data
+            except asyncio.TimeoutError:
+                logger.warning(f"API request timeout (attempt {attempt+1}/{self.max_retries})")
+                if attempt < self.max_retries - 1:
+                    await asyncio.sleep(1 * (attempt + 1))
+                    continue
+                raise Exception("API request timeout")
+            except Exception as e:
+                logger.error(f"API request error: {str(e)}")
+                if attempt < self.max_retries - 1:
+                    await asyncio.sleep(1 * (attempt + 1))
+                    continue
+                raise
+                
     async def request_humanloop(
         self,
         task_id: str,
+        conversation_id: str,
         loop_type: HumanLoopType,
         context: Dict[str, Any],
         metadata: Optional[Dict[str, Any]] = None,
-        timeout: Optional[int] = None,
-        conversation_id: Optional[str] = None
+        timeout: Optional[int] = None
     ) -> HumanLoopResult:
-        """通过API请求人机循环"""
-        request_id = self._generate_request_id()
+        """Request human-in-the-loop interaction
+        
+        Args:
+            task_id: Task identifier
+            conversation_id: Conversation ID for multi-turn dialogue
+            loop_type: Type of loop interaction
+            context: Context information provided to humans
+            metadata: Additional metadata
+            timeout: Request timeout in seconds
+            
+        Returns:
+            HumanLoopResult: Result object containing request ID and initial status
+        """
         metadata = metadata or {}
         
-        # 存储请求信息
-        self._store_request(
-            request_id, 
-            task_id, 
-            loop_type,
-            context, 
-            metadata, 
-            timeout,
-            conversation_id
-        )
+        # Generate request ID
+        request_id = self._generate_request_id()
         
-        # 构建API请求
-        payload = {
-            "request_id": request_id,
-            "task_id": task_id,
-            "loop_type": loop_type.value,
-            "context": context,
-            "metadata": metadata,
-            "timeout": timeout,
-            "conversation_id": conversation_id
-        }
-        
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self.api_url}/human-loops", 
-                    headers=self.headers,
-                    json=payload
-                ) as response:
-                    if response.status == 200 or response.status == 201:
-                        data = await response.json()
-                        return HumanLoopResult(
-                            request_id=request_id,
-                            loop_type=loop_type,
-                            status=HumanLoopStatus.PENDING,
-                            feedback=data.get("feedback", {}),
-                            conversation_id=conversation_id
-                        )
-                    else:
-                        error_text = await response.text()
-                        return HumanLoopResult(
-                            request_id=request_id,
-                            loop_type=loop_type,
-                            status=HumanLoopStatus.ERROR,
-                            error=f"API错误: {response.status} - {error_text}",
-                            conversation_id=conversation_id
-                        )
-        except Exception as e:
+        # Determine which platform to use
+        platform = metadata.get("platform", self.default_platform)
+        if not platform:
             return HumanLoopResult(
+                conversation_id=conversation_id,
                 request_id=request_id,
                 loop_type=loop_type,
                 status=HumanLoopStatus.ERROR,
-                error=f"请求错误: {str(e)}",
-                conversation_id=conversation_id
+                error="Platform not specified. Please set 'platform' in metadata or set default_platform during initialization"
             )
-            
-    async def check_humanloop_status(self, request_id: str) -> HumanLoopResult:
-        """检查循环状态"""
-        if request_id not in self._requests:
-            return HumanLoopResult(
-                request_id=request_id,
-                loop_type=HumanLoopType.APPROVAL,  # 默认类型
-                status=HumanLoopStatus.ERROR,
-                error="请求ID不存在"
-            )
-            
-        request_info = self._requests[request_id]
+        # Store request information
+        self._store_request(
+            conversation_id=conversation_id,
+            request_id=request_id,
+            task_id=task_id,
+            loop_type=loop_type,
+            context=context,
+            metadata={**metadata, "platform": platform},
+            timeout=timeout
+        )
+        
+        # Prepare API request data
+        request_data = HumanLoopRequestData(
+            task_id=task_id,
+            conversation_id=conversation_id,
+            request_id=request_id,
+            loop_type=loop_type.value,
+            context=context,
+            platform=platform,
+            metadata=metadata
+        ).model_dump()
         
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{self.api_url}/human-loops/{request_id}", 
-                    headers=self.headers
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        status_str = data.get("status", "pending")
-                        
-                        try:
-                            status = HumanLoopStatus(status_str)
-                        except ValueError:
-                            status = HumanLoopStatus.ERROR
-                            
-                        return HumanLoopResult(
-                            request_id=request_id,
-                            loop_type=request_info["loop_type"],
-                            status=status,
-                            response=data.get("response", {}),
-                            feedback=data.get("feedback", {}),
-                            responded_by=data.get("responded_by"),
-                            responded_at=data.get("responded_at"),
-                            error=data.get("error"),
-                            conversation_id=request_info.get("conversation_id")
-                        )
-                    else:
-                        error_text = await response.text()
-                        return HumanLoopResult(
-                            request_id=request_id,
-                            loop_type=request_info["loop_type"],
-                            status=HumanLoopStatus.ERROR,
-                            error=f"API错误: {response.status} - {error_text}",
-                            conversation_id=request_info.get("conversation_id")
-                        )
-        except Exception as e:
-            return HumanLoopResult(
-                request_id=request_id,
-                loop_type=request_info["loop_type"],
-                status=HumanLoopStatus.ERROR,
-                error=f"请求错误: {str(e)}",
-                conversation_id=request_info.get("conversation_id")
+            # Send API request
+            response = await self._make_api_request(
+                endpoint="humanloop/request",
+                method="POST",
+                data=request_data
             )
             
+            # Check API response
+            api_response = APIResponse(**response)
+            if not api_response.success:
+                error_msg = api_response.error or "API request failed without error message"
+                
+                # Update request status to error
+                request_key = (conversation_id, request_id)
+                if request_key in self._requests:
+                    self._requests[request_key]["status"] = HumanLoopStatus.ERROR
+                    self._requests[request_key]["error"] = error_msg
+                    
+                return HumanLoopResult(
+                    conversation_id=conversation_id,
+                    request_id=request_id,
+                    loop_type=loop_type,
+                    status=HumanLoopStatus.ERROR,
+                    error=error_msg
+                )
+                
+            # Create polling task
+            poll_task = asyncio.create_task(
+                self._poll_request_status(conversation_id, request_id, platform)
+            )
+            self._poll_tasks[(conversation_id, request_id)] = poll_task
+            
+            # Create timeout task if timeout is set
+            if timeout:
+                self._create_timeout_task(conversation_id, request_id, timeout)
+                
+            return HumanLoopResult(
+                conversation_id=conversation_id,
+                request_id=request_id,
+                loop_type=loop_type,
+                status=HumanLoopStatus.PENDING
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to request human-in-the-loop: {str(e)}")
+            
+            # Update request status to error
+            request_key = (conversation_id, request_id)
+            if request_key in self._requests:
+                self._requests[request_key]["status"] = HumanLoopStatus.ERROR
+                self._requests[request_key]["error"] = str(e)
+                
+            return HumanLoopResult(
+                conversation_id=conversation_id,
+                request_id=request_id,
+                loop_type=loop_type,
+                status=HumanLoopStatus.ERROR,
+                error=str(e)
+            )
+    async def check_request_status(
+        self,
+        conversation_id: str,
+        request_id: str
+    ) -> HumanLoopResult:
+        """Check request status
+        
+        Args:
+            conversation_id: Conversation identifier
+            request_id: Request identifier
+            
+        Returns:
+            HumanLoopResult: Result object containing current status
+        """
+        request_info = self._get_request(conversation_id, request_id)
+        if not request_info:
+            return HumanLoopResult(
+                conversation_id=conversation_id,
+                request_id=request_id,
+                loop_type=HumanLoopType.CONVERSATION,
+                status=HumanLoopStatus.ERROR,
+                error=f"Request '{request_id}' not found in conversation '{conversation_id}'"
+            )
+        
+        result = HumanLoopResult(
+            conversation_id=conversation_id,
+            request_id=request_id,
+            loop_type=request_info.get("loop_type", HumanLoopType.CONVERSATION),
+            status=request_info.get("status", HumanLoopStatus.PENDING),
+            response=request_info.get("response", {}),
+            feedback=request_info.get("feedback", {}),
+            responded_by=request_info.get("responded_by", None),
+            responded_at=request_info.get("responded_at", None),
+            error=request_info.get("error", None)
+        )
+        
+        return result
+
+            
+    async def cancel_request(
+        self,
+        conversation_id: str,
+        request_id: str
+    ) -> bool:
+        """Cancel human-in-the-loop request
+        
+        Args:
+            conversation_id: Conversation identifier for multi-turn dialogue
+            request_id: Request identifier for specific interaction request
+            
+        Returns:
+            bool: Whether cancellation was successful, True for success, False for failure
+        """
+        # First call parent method to update local state
+        result = await super().cancel_request(conversation_id, request_id)
+        if not result:
+            return False
+            
+        # Get request information
+        request_info = self._get_request(conversation_id, request_id)
+        if not request_info:
+            return False
+            
+        # Get platform information
+        platform = request_info.get("metadata", {}).get("platform")
+        if not platform:
+            logger.error(f"Cancel request failed: Platform information not found")
+            return False
+            
+        try:
+            # Send API request to cancel request
+            cancel_data = HumanLoopCancelData(
+                conversation_id=conversation_id,
+                request_id=request_id,
+                platform=platform
+            ).model_dump()
+            
+            response = await self._make_api_request(
+                endpoint="humanloop/cancel",
+                method="POST",
+                data=cancel_data
+            )
+            
+            # Check API response
+            api_response = APIResponse(**response)
+            if not api_response.success:
+                error_msg = api_response.error or "Cancel request failed without error message"
+                logger.error(f"Cancel request failed: {error_msg}")
+                return False
+                
+            # Cancel polling task
+            if (conversation_id, request_id) in self._poll_tasks:
+                self._poll_tasks[(conversation_id, request_id)].cancel()
+                del self._poll_tasks[(conversation_id, request_id)]
+                
+            return True
+            
+        except Exception as e:
+            logger.error(f"Cancel request failed: {str(e)}")
+            return False
+            
+    async def cancel_conversation(
+        self,
+        conversation_id: str
+    ) -> bool:
+        """Cancel entire conversation
+        
+        Args:
+            conversation_id: Conversation identifier
+            
+        Returns:
+            bool: Whether cancellation was successful
+        """
+        # First call parent method to update local state
+        result = await super().cancel_conversation(conversation_id)
+        if not result:
+            return False
+            
+        # Get all requests in the conversation
+        request_ids = self._get_conversation_requests(conversation_id)
+        if not request_ids:
+            return True  # No requests to cancel
+            
+        # Get platform info from first request (assuming all requests use same platform)
+        first_request = self._get_request(conversation_id, request_ids[0])
+        if not first_request:
+            return False
+            
+        platform = first_request.get("metadata", {}).get("platform")
+        if not platform:
+            logger.error(f"Cancel conversation failed: Platform information not found")
+            return False
+            
+        try:
+            # Send API request to cancel conversation
+            cancel_data = HumanLoopCancelConversationData(
+                conversation_id=conversation_id,
+                platform=platform
+            ).model_dump()
+            
+            response = await self._make_api_request(
+                endpoint="humanloop/cancel_conversation",
+                method="POST",
+                data=cancel_data
+            )
+            
+            # Check API response
+            api_response = APIResponse(**response)
+            if not api_response.success:
+                error_msg = api_response.error or "Cancel conversation failed without error message"
+                logger.error(f"Cancel conversation failed: {error_msg}")
+                return False
+                
+            # Cancel all polling tasks
+            for request_id in request_ids:
+                if (conversation_id, request_id) in self._poll_tasks:
+                    self._poll_tasks[(conversation_id, request_id)].cancel()
+                    del self._poll_tasks[(conversation_id, request_id)]
+                    
+            return True
+            
+        except Exception as e:
+            logger.error(f"Cancel conversation failed: {str(e)}")
+            return False
     async def continue_humanloop(
         self,
-        request_id: str,
+        conversation_id: str,
         context: Dict[str, Any],
         metadata: Optional[Dict[str, Any]] = None,
         timeout: Optional[int] = None,
-        conversation_id: Optional[str] = None
     ) -> HumanLoopResult:
-        """继续人机循环"""
-        if request_id not in self._requests:
+        """Continue human-in-the-loop interaction
+        
+        Args:
+            conversation_id: Conversation ID for multi-turn dialogue
+            context: Context information provided to humans
+            metadata: Additional metadata
+            timeout: Request timeout in seconds
+            
+        Returns:
+            HumanLoopResult: Result object containing request ID and status
+        """
+        # 检查对话是否存在
+        conversation_info = self._get_conversation(conversation_id)
+        if not conversation_info:
             return HumanLoopResult(
-                request_id=request_id,
-                loop_type=HumanLoopType.CONVERSATION,  # 默认为对话类型
+                conversation_id=conversation_id,
+                request_id="",
+                loop_type=HumanLoopType.CONVERSATION,
                 status=HumanLoopStatus.ERROR,
-                error="请求ID不存在",
-                conversation_id=conversation_id
+                error=f"Conversation '{conversation_id}' not found"
             )
             
-        request_info = self._requests[request_id]
         metadata = metadata or {}
         
-        # 如果未提供conversation_id，使用请求信息中的值
-        if not conversation_id and "conversation_id" in request_info:
-            conversation_id = request_info["conversation_id"]
+        # Generate request ID
+        request_id = self._generate_request_id()
         
-        # 更新请求信息
-        request_info["context"] = context
-        request_info["metadata"].update(metadata)
-        if timeout:
-            request_info["timeout"] = timeout
-        if conversation_id:
-            request_info["conversation_id"] = conversation_id
-        request_info["status"] = HumanLoopStatus.INPROGRESS
-        self._requests[request_id] = request_info
+        # Get task ID
+        task_id = conversation_info.get("task_id")
+        if not task_id:
+            return HumanLoopResult(
+                conversation_id=conversation_id,
+                request_id=request_id,
+                loop_type=HumanLoopType.CONVERSATION,
+                status=HumanLoopStatus.ERROR,
+                error=f"Task ID not found in conversation '{conversation_id}'"
+            )
+        # Determine which platform to use
+        platform = metadata.get("platform", self.default_platform)
+        if not platform:
+            return HumanLoopResult(
+                conversation_id=conversation_id,
+                request_id=request_id,
+                loop_type=HumanLoopType.CONVERSATION,
+                status=HumanLoopStatus.ERROR,
+                error="Platform not specified. Please set 'platform' in metadata or set default_platform during initialization"
+            )
+        # Store request information
+        self._store_request(
+            conversation_id=conversation_id,
+            request_id=request_id,
+            task_id=task_id,
+            loop_type=HumanLoopType.CONVERSATION,
+            context=context,
+            metadata={**metadata, "platform": platform},
+            timeout=timeout
+        )
         
-        # 构建API请求
-        payload = {
-            "context": context,
-            "metadata": metadata,
-            "timeout": timeout,
-            "conversation_id": conversation_id
-        }
+        # Prepare API request data
+        continue_data = HumanLoopContinueData(
+            conversation_id=conversation_id,
+            request_id=request_id,
+            task_id=task_id,
+            context=context,
+            platform=platform,
+            metadata=metadata
+        ).model_dump()
         
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self.api_url}/human-loops/{request_id}/continue", 
-                    headers=self.headers,
-                    json=payload
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return HumanLoopResult(
-                            request_id=request_id,
-                            loop_type=request_info["loop_type"],
-                            status=HumanLoopStatus.INPROGRESS,
-                            feedback=data.get("feedback", {}),
-                            conversation_id=conversation_id
-                        )
-                    else:
-                        error_text = await response.text()
-                        return HumanLoopResult(
-                            request_id=request_id,
-                            loop_type=request_info["loop_type"],
-                            status=HumanLoopStatus.ERROR,
-                            error=f"API错误: {response.status} - {error_text}",
-                            conversation_id=conversation_id
-                        )
-        except Exception as e:
-            return HumanLoopResult(
-                request_id=request_id,
-                loop_type=request_info["loop_type"],
-                status=HumanLoopStatus.ERROR,
-                error=f"请求错误: {str(e)}",
-                conversation_id=conversation_id
+            # Send API request
+            response = await self._make_api_request(
+                endpoint="humanloop/continue",
+                method="POST",
+                data=continue_data
             )
             
-    async def cancel_humanloop(self, request_id: str) -> bool:
-        """取消人机循环请求"""
-        if request_id not in self._requests:
-            return False
+            # Check API response
+            api_response = APIResponse(**response)
+            if not api_response.success:
+                error_msg = api_response.error or "Continue conversation failed without error message"
+                
+                # Update request status to error
+                request_key = (conversation_id, request_id)
+                if request_key in self._requests:
+                    self._requests[request_key]["status"] = HumanLoopStatus.ERROR
+                    self._requests[request_key]["error"] = error_msg
+                    
+                return HumanLoopResult(
+                    conversation_id=conversation_id,
+                    request_id=request_id,
+                    loop_type=HumanLoopType.CONVERSATION,
+                    status=HumanLoopStatus.ERROR,
+                    error=error_msg
+                )
+                
+            # Create polling task
+            poll_task = asyncio.create_task(
+                self._poll_request_status(conversation_id, request_id, platform)
+            )
+            self._poll_tasks[(conversation_id, request_id)] = poll_task
             
+            # Create timeout task if timeout is set
+            if timeout:
+                self._create_timeout_task(conversation_id, request_id, timeout)
+                
+            return HumanLoopResult(
+                conversation_id=conversation_id,
+                request_id=request_id,
+                loop_type=HumanLoopType.CONVERSATION,
+                status=HumanLoopStatus.PENDING
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to continue human-in-the-loop: {str(e)}")
+            
+            # Update request status to error
+            request_key = (conversation_id, request_id)
+            if request_key in self._requests:
+                self._requests[request_key]["status"] = HumanLoopStatus.ERROR
+                self._requests[request_key]["error"] = str(e)
+                
+            return HumanLoopResult(
+                conversation_id=conversation_id,
+                request_id=request_id,
+                loop_type=HumanLoopType.CONVERSATION,
+                status=HumanLoopStatus.ERROR,
+                error=str(e)
+            )
+            
+    async def _poll_request_status(
+        self,
+        conversation_id: str,
+        request_id: str,
+        platform: str
+    ) -> None:
+        """Poll request status
+        
+        Args:
+            conversation_id: Conversation identifier
+            request_id: Request identifier
+            platform: Platform identifier
+        """
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.delete(
-                    f"{self.api_url}/human-loops/{request_id}", 
-                    headers=self.headers
-                ) as response:
-                    if response.status == 200 or response.status == 204:
-                        # 从本地存储中删除请求
-                        if request_id in self._requests:
-                            del self._requests[request_id]
-                        return True
-                    else:
-                        return False
-        except Exception:
-            # 即使API调用失败，也尝试从本地存储中删除
-            if request_id in self._requests:
-                del self._requests[request_id]
-            return False
+            while True:
+                # Get request information
+                request_info = self._get_request(conversation_id, request_id)
+                if not request_info:
+                    logger.warning(f"Polling stopped: Request '{request_id}' not found in conversation '{conversation_id}'")
+                    return
+                    
+                # Stop polling if request is in final status
+                status = request_info.get("status")
+                if status not in  [HumanLoopStatus.PENDING, HumanLoopStatus.INPROGRESS]:
+                    return
+                
+                # Send API request to get status
+                params = HumanLoopStatusParams(
+                    conversation_id=conversation_id,
+                    request_id=request_id,
+                    platform=platform
+                ).model_dump()
+                
+                response = await self._make_api_request(
+                    endpoint="humanloop/status",
+                    method="GET",
+                    params=params
+                )
+                
+                # Parse response
+                status_response = HumanLoopStatusResponse(**response)
+                
+                # Log error but continue polling if request fails
+                if not status_response.success:
+                    logger.warning(f"Failed to get status: {status_response.error}")
+                    await asyncio.sleep(self.poll_interval)
+                    continue
+                    
+                # Parse status
+                try:
+                    new_status = HumanLoopStatus(status_response.status)
+                except ValueError:
+                    logger.warning(f"Unknown status value: {status_response.status}, using PENDING")
+                    new_status = HumanLoopStatus.PENDING
+                    
+                # Update request information
+                request_key = (conversation_id, request_id)
+                if request_key in self._requests:
+                    self._requests[request_key]["status"] = new_status
+                    
+                    # Update response data
+                    for field in ["response", "feedback", "responded_by", "responded_at", "error"]:
+                        value = getattr(status_response, field, None)
+                        if value is not None:
+                            self._requests[request_key][field] = value
+                            
+                        
+                    # Stop polling if request is in final status
+                    if new_status not in  [HumanLoopStatus.PENDING, HumanLoopStatus.INPROGRESS]:
+                        return
+                        
+                # Wait for next polling interval
+                await asyncio.sleep(self.poll_interval)
+                
+        except asyncio.CancelledError:
+            logger.info(f"Polling task cancelled: conversation '{conversation_id}', request '{request_id}'")
+            return
+        except Exception as e:
+            logger.error(f"Polling task error: {str(e)}")
+            return
