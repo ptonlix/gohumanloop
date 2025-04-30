@@ -14,7 +14,7 @@ import os
 import uuid
 import json
 from dotenv import load_dotenv
-from datetime import datetime
+from gohumanloop.utils import get_secret_from_env
 
 from gohumanloop.providers.api_provider import APIProvider
 from gohumanloop.core.interface import HumanLoopType, HumanLoopStatus
@@ -416,8 +416,8 @@ async def main():
 
     """主函数"""
     # 从环境变量获取API配置
-    api_base_url = os.environ.get("API_BASE_URL", "http://localhost:8000")
-    api_key = os.environ.get("API_KEY", "gohumanloop")
+    api_base_url = os.environ.get("API_BASE_URL", "http://localhost:8000/api")
+    api_key = get_secret_from_env("GOHUMANLOOP_API_KEY", "gohumanloop")
     
     # 创建 APIProvider 实例
     provider = APIProvider(

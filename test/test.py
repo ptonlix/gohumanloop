@@ -1,27 +1,21 @@
-from typing import Literal
-from langgraph.types import interrupt, Command
+import asyncio
 
-def human_approval(state: State) -> Command[Literal["some_node", "another_node"]]:
-    is_approved = interrupt(
-        {
-            "question": "Is this correct?",
-            # Surface the output that should be
-            # reviewed and approved by the human.
-            "llm_output": state["llm_output"]
-        }
-    )
+async def nested_coroutine():
+    print("Nested coroutine running")
+    await asyncio.sleep(1)
+    return "Nested result"
 
-    if is_approved:
-        return Command(goto="some_node")
-    else:
-        return Command(goto="another_node")
+async def main():
+    print("Main coroutine running")
+    result = run_async_safely(nested_coroutine())  # 在 asyncio.run() 内部调用
+    print("Got result:", result)
 
-# Add the node to the graph in an appropriate location
-# and connect it to the relevant nodes.
-graph_builder.add_node("human_approval", human_approval)
-graph = graph_builder.compile(checkpointer=checkpointer)
+def run_async_safely(coro):
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    return loop.run_until_complete(coro)
 
-# After running the graph and hitting the interrupt, the graph will pause.
-# Resume it with either an approval or rejection.
-thread_config = {"configurable": {"thread_id": "some_id"}}
-graph.invoke(Command(resume=True), config=thread_config)
+asyncio.run(main())

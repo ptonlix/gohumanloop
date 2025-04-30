@@ -6,8 +6,11 @@ import uuid
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
-from fastapi import FastAPI, HTTPException, Header, Depends, APIRouter
+from fastapi import FastAPI, HTTPException, Header, Depends, APIRouter, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 # 配置日志
@@ -64,21 +67,36 @@ class HumanLoopContinueData(BaseModel):
     platform: str = Field(description="使用的平台")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="附加元数据")
 
+# 新增：任务数据同步模型
+class TaskSyncData(BaseModel):
+    """任务数据同步模型"""
+    task_id: str = Field(description="任务标识符")
+    conversations: List[Dict[str, Any]] = Field(description="对话数据列表")
+    timestamp: str = Field(description="时间戳")
+
 # 创建 FastAPI 应用
 app = FastAPI(title="GoHumanLoop Mock Server", description="Mock API for GoHumanLoop service")
 
 # API 密钥验证（简单实现）
 API_KEYS = {"gohumanloop": "admin"}
 
-def verify_api_key(x_api_key: Optional[str] = Header(None)):
-    """验证 API 密钥"""
-    if x_api_key not in API_KEYS:
-        raise HTTPException(status_code=401, detail="Invalid API key")
-    return x_api_key
+def verify_api_key(authorization: Optional[str] = Header(None)):
+    """验证 API 密钥（Bearer Token 方式）"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization header missing")
+        
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Invalid authorization format. Use 'Bearer TOKEN'")
+        
+    token = parts[1]
+    if token not in API_KEYS:
+        raise HTTPException(status_code=401, detail="Invalid API token")
+    return token
 
 # 创建需要验证的路由组
 api_router = APIRouter(
-    prefix="/humanloop",
+    prefix="/api/v1/humanloop",
     dependencies=[Depends(verify_api_key)]
 )
 
@@ -94,6 +112,9 @@ app.add_middleware(
 # 存储请求数据
 requests_store: Dict[str, Dict[str, Any]] = {}
 conversations_store: Dict[str, List[str]] = {}
+
+# 新增：存储同步的任务数据
+tasks_store: Dict[str, Dict[str, Any]] = {}
 
 # 模拟自动响应任务
 auto_response_tasks = {}
@@ -201,7 +222,7 @@ async def check_status(conversation_id: str, request_id: str, platform: str):
     )
 
 @api_router.post("/cancel", response_model=APIResponse)
-async def cancel_request(data: HumanLoopCancelData, api_key: str = Depends(verify_api_key)):
+async def cancel_request(data: HumanLoopCancelData, token: str = Depends(verify_api_key)):
     """取消人机循环请求"""
     request_key = f"{data.conversation_id}:{data.request_id}"
     
@@ -222,7 +243,7 @@ async def cancel_request(data: HumanLoopCancelData, api_key: str = Depends(verif
     return APIResponse(success=True)
 
 @api_router.post("/cancel_conversation", response_model=APIResponse)
-async def cancel_conversation(data: HumanLoopCancelConversationData, api_key: str = Depends(verify_api_key)):
+async def cancel_conversation(data: HumanLoopCancelConversationData, token: str = Depends(verify_api_key)):
     """取消整个对话"""
     if data.conversation_id not in conversations_store:
         return APIResponse(
@@ -246,7 +267,7 @@ async def cancel_conversation(data: HumanLoopCancelConversationData, api_key: st
     return APIResponse(success=True)
 
 @api_router.post("/continue", response_model=APIResponse)
-async def continue_humanloop(data: HumanLoopContinueData, api_key: str = Depends(verify_api_key)):
+async def continue_humanloop(data: HumanLoopContinueData, token: str = Depends(verify_api_key)):
     """继续人机循环交互"""
     # 检查对话是否存在
     if data.conversation_id not in conversations_store:
@@ -279,6 +300,376 @@ async def continue_humanloop(data: HumanLoopContinueData, api_key: str = Depends
     auto_response_tasks[request_key] = task
     
     return APIResponse(success=True)
+
+# 新增：接收任务数据同步的路由
+@api_router.post("/tasks/sync", response_model=APIResponse)
+async def sync_task_data(data: Dict[str, Any], token: str = Depends(verify_api_key)):
+    """接收任务数据同步"""
+    logger.info(f"收到任务数据同步: {json.dumps(data)[:200]}...")  # 只记录前200个字符
+    
+    task_id = data.get("task_id")
+    if not task_id:
+        return APIResponse(
+            success=False,
+            error="Missing task_id"
+        )
+    
+    # 检查任务是否已存在
+    if task_id in tasks_store:
+        # 获取现有数据
+        existing_data = tasks_store[task_id].get("data", {})
+        existing_conversations = existing_data.get("conversations", [])
+        
+        # 获取新数据中的对话
+        new_conversations = data.get("conversations", [])
+        
+        # 创建对话ID到索引的映射，用于快速查找
+        conv_map = {conv.get("conversation_id"): idx for idx, conv in enumerate(existing_conversations)}
+        
+        # 合并对话数据
+        for new_conv in new_conversations:
+            conv_id = new_conv.get("conversation_id")
+            if conv_id in conv_map:
+                # 对话已存在，更新或追加请求
+                existing_conv = existing_conversations[conv_map[conv_id]]
+                existing_requests = {req.get("request_id"): req for req in existing_conv.get("requests", [])}
+                
+                # 处理新请求
+                for new_req in new_conv.get("requests", []):
+                    req_id = new_req.get("request_id")
+                    if req_id:
+                        existing_requests[req_id] = new_req
+                
+                # 更新请求列表
+                existing_conv["requests"] = list(existing_requests.values())
+            else:
+                # 对话不存在，直接添加
+                existing_conversations.append(new_conv)
+        
+        # 更新数据
+        updated_data = existing_data.copy()
+        updated_data["conversations"] = existing_conversations
+        updated_data["timestamp"] = data.get("timestamp", datetime.now().isoformat())
+        
+        # 存储更新后的数据
+        tasks_store[task_id] = {
+            "data": updated_data,
+            "received_at": datetime.now().isoformat(),
+            "updates": tasks_store[task_id].get("updates", 0) + 1
+        }
+    else:
+        # 任务不存在，创建新任务
+        tasks_store[task_id] = {
+            "data": data,
+            "received_at": datetime.now().isoformat(),
+            "updates": 1
+        }
+    
+    return APIResponse(success=True)
+
+# 新增：获取所有任务数据的路由
+@api_router.get("/tasks", response_model=Dict[str, Any])
+async def get_all_tasks(token: str = Depends(verify_api_key)):
+    """获取所有任务数据"""
+    return {
+        "success": True,
+        "tasks": tasks_store
+    }
+
+# 新增：获取特定任务数据的路由
+@api_router.get("/tasks/{task_id}", response_model=Dict[str, Any])
+async def get_task(task_id: str, token: str = Depends(verify_api_key)):
+    """获取特定任务数据"""
+    if task_id not in tasks_store:
+        return {
+            "success": False,
+            "error": f"Task not found: {task_id}"
+        }
+    
+    return {
+        "success": True,
+        "task": tasks_store[task_id]
+    }
+
+# 新增：HTML页面路由，用于展示审核数据
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard(request: Request):
+    """审核数据展示页面"""
+    html_content = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>GoHumanLoop 审核数据展示</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 20px;
+                background-color: #f5f5f5;
+            }
+            .container {
+                max-width: 1200px;
+                margin: 0 auto;
+                background-color: white;
+                padding: 20px;
+                border-radius: 5px;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            }
+            h1 {
+                color: #333;
+                border-bottom: 1px solid #eee;
+                padding-bottom: 10px;
+            }
+            .task-list {
+                margin-bottom: 20px;
+            }
+            .task-item {
+                background-color: #f9f9f9;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                padding: 15px;
+                margin-bottom: 15px;
+            }
+            .task-header {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 10px;
+                font-weight: bold;
+            }
+            .conversation-list {
+                margin-left: 20px;
+            }
+            .conversation-item {
+                background-color: #fff;
+                border: 1px solid #eee;
+                border-radius: 4px;
+                padding: 10px;
+                margin-bottom: 10px;
+            }
+            .request-list {
+                margin-left: 20px;
+            }
+            .request-item {
+                background-color: #f5f5f5;
+                border: 1px solid #eee;
+                border-radius: 4px;
+                padding: 10px;
+                margin-bottom: 10px;
+            }
+            .status-approved {
+                color: green;
+                font-weight: bold;
+            }
+            .status-rejected {
+                color: red;
+                font-weight: bold;
+            }
+            .status-pending {
+                color: orange;
+                font-weight: bold;
+            }
+            .status-completed {
+                color: blue;
+                font-weight: bold;
+            }
+            .status-cancelled {
+                color: gray;
+                font-weight: bold;
+            }
+            .refresh-btn {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 10px 15px;
+                text-align: center;
+                text-decoration: none;
+                display: inline-block;
+                font-size: 16px;
+                margin: 10px 0;
+                cursor: pointer;
+                border-radius: 4px;
+            }
+            pre {
+                background-color: #f5f5f5;
+                padding: 10px;
+                border-radius: 4px;
+                overflow-x: auto;
+            }
+            .empty-message {
+                text-align: center;
+                padding: 20px;
+                color: #666;
+            }
+            .api-key-form {
+                margin-bottom: 20px;
+                display: flex;
+                align-items: center;
+            }
+            .api-key-form input {
+                padding: 8px;
+                margin-right: 10px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                flex-grow: 1;
+            }
+            .api-key-form button {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 8px 15px;
+                cursor: pointer;
+                border-radius: 4px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>GoHumanLoop 审核数据展示</h1>
+            
+            <div class="api-key-form">
+                <input type="text" id="apiKey" placeholder="输入API密钥" value="gohumanloop">
+                <button onclick="setApiKey()">设置API密钥</button>
+            </div>
+            
+            <button class="refresh-btn" onclick="loadTasks()">刷新数据</button>
+            
+            <div id="taskList" class="task-list">
+                <div class="empty-message">加载中...</div>
+            </div>
+        </div>
+
+        <script>
+            let apiKey = 'gohumanloop';
+            
+            function setApiKey() {
+                apiKey = document.getElementById('apiKey').value;
+                loadTasks();
+            }
+            
+            function loadTasks() {
+                const taskList = document.getElementById('taskList');
+                taskList.innerHTML = '<div class="empty-message">加载中...</div>';
+                
+                fetch('/api/v1/humanloop/tasks', {
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('API请求失败');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success && Object.keys(data.tasks).length > 0) {
+                        let html = '';
+                        
+                        for (const [taskId, taskInfo] of Object.entries(data.tasks)) {
+                            const taskData = taskInfo.data;
+                            const receivedAt = new Date(taskInfo.received_at).toLocaleString();
+                            
+                            html += `
+                                <div class="task-item">
+                                    <div class="task-header">
+                                        <span>任务ID: ${taskId}</span>
+                                        <span>接收时间: ${receivedAt}</span>
+                                    </div>
+                                    <div class="conversation-list">
+                            `;
+                            
+                            if (taskData.conversations && taskData.conversations.length > 0) {
+                                taskData.conversations.forEach(conversation => {
+                                    html += `
+                                        <div class="conversation-item">
+                                            <div>对话ID: ${conversation.conversation_id}</div>
+                                            <div>提供者: ${conversation.provider_id || '未知'}</div>
+                                            <div class="request-list">
+                                    `;
+                                    
+                                    if (conversation.requests && conversation.requests.length > 0) {
+                                        conversation.requests.forEach(request => {
+                                            let statusClass = '';
+                                            switch(request.status) {
+                                                case 'approved': statusClass = 'status-approved'; break;
+                                                case 'rejected': statusClass = 'status-rejected'; break;
+                                                case 'pending': statusClass = 'status-pending'; break;
+                                                case 'completed': statusClass = 'status-completed'; break;
+                                                case 'cancelled': statusClass = 'status-cancelled'; break;
+                                                default: statusClass = '';
+                                            }
+                                            
+                                            html += `
+                                                <div class="request-item">
+                                                    <div>请求ID: ${request.request_id}</div>
+                                                    <div>类型: ${request.loop_type}</div>
+                                                    <div>状态: <span class="${statusClass}">${request.status}</span></div>
+                                            `;
+                                            
+                                            if (request.responded_by) {
+                                                html += `<div>响应者: ${request.responded_by}</div>`;
+                                            }
+                                            
+                                            if (request.responded_at) {
+                                                html += `<div>响应时间: ${new Date(request.responded_at).toLocaleString()}</div>`;
+                                            }
+                                            
+                                            if (request.response) {
+                                                html += `
+                                                    <div>响应内容:
+                                                        <pre>${JSON.stringify(request.response, null, 2)}</pre>
+                                                    </div>
+                                                `;
+                                            }
+                                            
+                                            if (request.error) {
+                                                html += `<div>错误: ${request.error}</div>`;
+                                            }
+                                            
+                                            html += `</div>`;
+                                        });
+                                    } else {
+                                        html += `<div>无请求数据</div>`;
+                                    }
+                                    
+                                    html += `
+                                            </div>
+                                        </div>
+                                    `;
+                                });
+                            } else {
+                                html += `<div>无对话数据</div>`;
+                            }
+                            
+                            html += `
+                                    </div>
+                                </div>
+                            `;
+                        }
+                        
+                        taskList.innerHTML = html;
+                    } else {
+                        taskList.innerHTML = '<div class="empty-message">暂无任务数据</div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    taskList.innerHTML = `<div class="empty-message">加载失败: ${error.message}</div>`;
+                });
+            }
+            
+            // 页面加载时自动加载任务数据
+            document.addEventListener('DOMContentLoaded', loadTasks);
+            
+            // 每30秒自动刷新一次
+            setInterval(loadTasks, 30000);
+        </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
 
 # 健康检查不需要验证
 @app.get("/health")

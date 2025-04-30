@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List
 import asyncio
 import json
 import uuid
@@ -12,26 +12,26 @@ from gohumanloop.core.interface import (
 )
 
 class BaseProvider(HumanLoopProvider, ABC):
-    """基础人机循环提供者实现"""
+    """Base implementation of human-in-the-loop provider"""
 
     
     def __init__(self, name: str,  config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
-        # 用户自定义名称，如果未提供则使用UUID
+        # Custom name, will use UUID if not provided
         self.name = name
-        # 存储请求信息，使用 (conversation_id, request_id) 作为键
-        self._requests = ThreadSafeDict() # 使用线程安全字典存储请求信息
-        # 存储对话信息，包括对话中的请求列表和最新请求ID
+        # Store request information using (conversation_id, request_id) as key
+        self._requests = ThreadSafeDict() # Using thread-safe dictionary to store request information
+        # Store conversation information, including request list and latest request ID
         self._conversations = {}
-        # 用于快速查找对话中的请求
+        # For quick lookup of requests in conversations
         self._conversation_requests = defaultdict(list)
-        # 存储超时任务
+        # Store timeout tasks
         self._timeout_tasks = {}
 
         self.prompt_template = self.config.get("prompt_template", "{context}")
 
     def __str__(self) -> str:
-        """返回该实例的描述信息"""
+        """Returns a string description of this instance"""
         total_conversations = len(self._conversations)
         total_requests = len(self._requests)
         active_requests = sum(1 for req in self._requests.values()
@@ -42,11 +42,11 @@ class BaseProvider(HumanLoopProvider, ABC):
                 f"active_requests={active_requests})")
     
     def __repr__(self) -> str:
-        """返回该实例的详细描述信息"""
+        """Returns a detailed string representation of this instance"""
         return self.__str__()
 
     def _generate_request_id(self) -> str:
-        """生成唯一请求ID"""
+        """Generates a unique request ID"""
         return str(uuid.uuid4())
         
     def _store_request(
@@ -59,8 +59,8 @@ class BaseProvider(HumanLoopProvider, ABC):
         metadata: Dict[str, Any],
         timeout: Optional[int],
     ) -> None:
-        """存储请求信息"""
-        # 使用元组 (conversation_id, request_id) 作为键存储请求信息
+        """Store request information"""
+        # Store request information using tuple (conversation_id, request_id) as key
         self._requests[(conversation_id, request_id)] = {
             "task_id": task_id,
             "loop_type": loop_type,
@@ -71,7 +71,7 @@ class BaseProvider(HumanLoopProvider, ABC):
             "timeout": timeout,
         }
         
-        # 更新对话信息
+        # Update conversation information
         if conversation_id not in self._conversations:
             self._conversations[conversation_id] = {
                 "task_id": task_id,
@@ -79,21 +79,21 @@ class BaseProvider(HumanLoopProvider, ABC):
                 "created_at": datetime.now().isoformat(),
             }
         
-        # 添加请求到对话的请求列表
+        # Add request to conversation request list
         self._conversation_requests[conversation_id].append(request_id)
-        # 更新最新请求ID
+        # Update latest request ID
         self._conversations[conversation_id]["latest_request_id"] = request_id
         
     def _get_request(self, conversation_id: str, request_id: str) -> Optional[Dict[str, Any]]:
-        """获取请求信息"""
+        """Get request information"""
         return self._requests.get((conversation_id, request_id))
         
     def _get_conversation(self, conversation_id: str) -> Optional[Dict[str, Any]]:
-        """获取对话信息"""
+        """Get conversation information"""
         return self._conversations.get(conversation_id)
         
     def _get_conversation_requests(self, conversation_id: str) -> List[str]:
-        """获取对话中的所有请求ID"""
+        """Get all request IDs in the conversation"""
         return self._conversation_requests.get(conversation_id, [])
         
     async def request_humanloop(
@@ -105,35 +105,36 @@ class BaseProvider(HumanLoopProvider, ABC):
         metadata: Optional[Dict[str, Any]] = None,
         timeout: Optional[int] = None
     ) -> HumanLoopResult:
-        """请求人机循环
+        """Request human-in-the-loop interaction
         
         Args:
-            task_id: 任务标识符
-            conversation_id: 对话ID，用于多轮对话
-            loop_type: 循环类型
-            context: 提供给人类的上下文信息
-            metadata: 附加元数据
-            timeout: 请求超时时间（秒）
+            task_id: Task identifier
+            conversation_id: Conversation ID for multi-turn dialogues
+            loop_type: Type of human loop interaction
+            context: Context information provided to human
+            metadata: Additional metadata
+            timeout: Request timeout in seconds
             
         Returns:
-            HumanLoopResult: 包含请求ID和初始状态的结果对象
+            HumanLoopResult: Result object containing request ID and initial status
         """
-        # 子类需要实现此方法
+        # Subclasses must implement this method
         raise NotImplementedError("Subclasses must implement request_humanloop")
+        
         
     async def check_request_status(
         self,
         conversation_id: str,
         request_id: str
     ) -> HumanLoopResult:
-        """检查请求状态
+        """Check request status
         
         Args:
-            conversation_id: 对话标识符，用于关联多轮对话
-            request_id: 请求标识符，用于标识具体的交互请求
+            conversation_id: Conversation identifier for multi-turn dialogues
+            request_id: Request identifier for specific interaction request
             
         Returns:
-            HumanLoopResult: 包含当前请求状态的结果对象，包括状态、响应数据等信息
+            HumanLoopResult: Result object containing current request status, including status, response data, etc.
         """
         request_info = self._get_request(conversation_id, request_id)
         if not request_info:
@@ -145,20 +146,21 @@ class BaseProvider(HumanLoopProvider, ABC):
                 error=f"Request '{request_id}' not found in conversation '{conversation_id}'"
             )
             
-        # 子类需要实现具体的状态检查逻辑
+        # Subclasses need to implement specific status check logic
         raise NotImplementedError("Subclasses must implement check_request_status")
-    
+
+
     async def check_conversation_status(
         self,
         conversation_id: str
     ) -> HumanLoopResult:
-        """检查对话状态
+        """Check conversation status
         
         Args:
-            conversation_id: 对话标识符
+            conversation_id: Conversation identifier
             
         Returns:
-            HumanLoopResult: 包含对话最新请求的状态
+            HumanLoopResult: Result containing the status of the latest request in the conversation
         """
         conversation_info = self._get_conversation(conversation_id)
         if not conversation_info:
@@ -187,24 +189,24 @@ class BaseProvider(HumanLoopProvider, ABC):
         conversation_id: str,
         request_id: str
     ) -> bool:
-        """取消人机循环请求
+        """Cancel human-in-the-loop request
         
         Args:
-            conversation_id: 对话标识符，用于关联多轮对话
-            request_id: 请求标识符，用于标识具体的交互请求
+            conversation_id: Conversation identifier for multi-turn dialogues
+            request_id: Request identifier for specific interaction request
             
         Returns:
-            bool: 取消是否成功，True表示取消成功，False表示取消失败
+            bool: Whether cancellation was successful, True indicates success, False indicates failure
         """
 
-         # 取消超时任务
+        # Cancel timeout task
         if (conversation_id, request_id) in self._timeout_tasks:
             self._timeout_tasks[(conversation_id, request_id)].cancel()
             del self._timeout_tasks[(conversation_id, request_id)]
 
         request_key = (conversation_id, request_id)
         if request_key in self._requests:
-            # 更新请求状态为已取消
+            # Update request status to cancelled
             self._requests[request_key]["status"] = HumanLoopStatus.CANCELLED
             return True
         return False
@@ -213,28 +215,28 @@ class BaseProvider(HumanLoopProvider, ABC):
         self,
         conversation_id: str
     ) -> bool:
-        """取消整个对话
+        """Cancel the entire conversation
         
         Args:
-            conversation_id: 对话标识符
+            conversation_id: Conversation identifier
             
         Returns:
-            bool: 取消是否成功
+            bool: Whether the cancellation was successful
         """
         if conversation_id not in self._conversations:
             return False
             
-        # 取消对话中的所有请求
+        # Cancel all requests in the conversation
         success = True
         for request_id in self._get_conversation_requests(conversation_id):
             request_key = (conversation_id, request_id)
             if request_key in self._requests:
-                # 更新请求状态为已取消
-                # 只有请求处在中间状态(PENDING/IN_PROGRESS)时才能取消
+                # Update request status to cancelled
+                # Only requests in intermediate states (PENDING/IN_PROGRESS) can be cancelled
                 if self._requests[request_key]["status"] in [HumanLoopStatus.PENDING, HumanLoopStatus.INPROGRESS]:
                     self._requests[request_key]["status"] = HumanLoopStatus.CANCELLED
                     
-                    # 取消该请求的超时任务
+                    # Cancel the timeout task for this request
                     if request_key in self._timeout_tasks:
                         self._timeout_tasks[request_key].cancel()
                         del self._timeout_tasks[request_key]
@@ -250,18 +252,18 @@ class BaseProvider(HumanLoopProvider, ABC):
         metadata: Optional[Dict[str, Any]] = None,
         timeout: Optional[int] = None,
     ) -> HumanLoopResult:
-        """继续人机循环
+        """Continue human-in-the-loop interaction
         
         Args:
-            conversation_id: 对话ID，用于多轮对话
-            context: 提供给人类的上下文信息
-            metadata: 附加元数据
-            timeout: 请求超时时间（秒）
+            conversation_id: Conversation ID for multi-turn dialogues
+            context: Context information provided to human
+            metadata: Additional metadata
+            timeout: Request timeout in seconds
             
         Returns:
-            HumanLoopResult: 包含请求ID和状态的结果对象
+            HumanLoopResult: Result object containing request ID and status
         """
-        # 检查对话是否存在
+        # Check if conversation exists
         conversation_info = self._get_conversation(conversation_id)
         if not conversation_info:
             return HumanLoopResult(
@@ -272,17 +274,18 @@ class BaseProvider(HumanLoopProvider, ABC):
                 error=f"Conversation '{conversation_id}' not found"
             )
             
-        # 子类需要实现具体的继续对话逻辑
+        # Subclasses need to implement specific continuation logic
         raise NotImplementedError("Subclasses must implement continue_humanloop")
         
     def get_conversation_history(self, conversation_id: str) -> List[Dict[str, Any]]:
-        """获取指定对话的完整历史记录
+        """Get complete history for the specified conversation
         
         Args:
-            conversation_id: 对话ID
+            conversation_id: Conversation identifier
             
         Returns:
-            List[Dict[str, Any]]: 对话历史记录列表，每个元素包含请求ID、状态、上下文、响应等信息
+            List[Dict[str, Any]]: List of conversation history records, each containing request ID,
+                                 status, context, response and other information
         """
         conversation_history = []
         for request_id in self._get_conversation_requests(conversation_id):
@@ -306,33 +309,33 @@ class BaseProvider(HumanLoopProvider, ABC):
         request_id: str, 
         timeout: int
     ):
-        """创建超时任务
+        """Create timeout task
         
         Args:
-            conversation_id: 对话ID
-            request_id: 请求ID
-            timeout: 超时时间（秒）
+            conversation_id: Conversation ID
+            request_id: Request ID
+            timeout: Timeout duration in seconds
         """
         async def timeout_task():
             await asyncio.sleep(timeout)
             
-            # 检查当前状态
+            # Check current status
             request_info = self._get_request(conversation_id, request_id)
             if not request_info:
                 return
                 
             current_status = request_info.get("status", HumanLoopStatus.PENDING)
             
-            # 只有当状态为PENDING时才触发超时
-            # INPROGRESS状态表示对话正在进行中，不应视为超时
+            # Only trigger timeout when status is PENDING
+            # INPROGRESS status means conversation is ongoing, should not be considered as timeout
             if current_status == HumanLoopStatus.PENDING:
-                # 更新请求状态为超时
+                # Update request status to expired
                 request_info["status"] = HumanLoopStatus.EXPIRED
                 request_info["error"] = "Request timed out"
-            # 如果状态是INPROGRESS，重置超时任务
+            # If status is INPROGRESS, reset timeout task
             elif current_status == HumanLoopStatus.INPROGRESS:
-                # 对于进行中的对话，我们可以选择延长超时时间
-                # 这里我们简单地重新创建一个超时任务，使用相同的超时时间
+                # For ongoing conversations, we can choose to extend the timeout
+                # Here we simply create a new timeout task with the same timeout duration
                 if (conversation_id, request_id) in self._timeout_tasks:
                     self._timeout_tasks[(conversation_id, request_id)].cancel()
                 new_task = asyncio.create_task(timeout_task())
@@ -354,10 +357,11 @@ class BaseProvider(HumanLoopProvider, ABC):
         color: Optional[bool] = None
     ) -> str:
         """
-        根据内容动态生成 prompt，仅显示有内容的部分，并适配不同终端颜色显示。
-        color: None=自动检测，True=强制彩色，False=无色
+        Dynamically generate prompt based on content, only showing sections with content,
+        and adapt to different terminal color display.
+        color: None=auto detect, True=force color, False=no color
         """
-        # 自动检测终端是否支持ANSI颜色
+        # Auto detect if terminal supports ANSI colors
         def _supports_color():
             try:
                 import sys
@@ -365,7 +369,7 @@ class BaseProvider(HumanLoopProvider, ABC):
                     return False
                 import os
                 if os.name == "nt":
-                    # Windows 10+ 支持ANSI，老版本不支持
+                    # Windows 10+ supports ANSI, older versions don't
                     return "ANSICON" in os.environ or "WT_SESSION" in os.environ
                 return True
             except Exception:
@@ -374,9 +378,9 @@ class BaseProvider(HumanLoopProvider, ABC):
         if color is None:
             color = _supports_color()
 
-        # 定义颜色
+        # Define colors
         if color:
-            COLOR_TITLE = "\033[94m"   # 亮蓝色
+            COLOR_TITLE = "\033[94m"   # bright blue
             COLOR_RESET = "\033[0m"
         else:
             COLOR_TITLE = ""
@@ -409,4 +413,3 @@ class BaseProvider(HumanLoopProvider, ABC):
         lines.append(f"\n{COLOR_TITLE}=== END ==={COLOR_RESET}")
 
         return "\n".join(lines)
-    

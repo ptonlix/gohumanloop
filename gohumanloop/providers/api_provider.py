@@ -3,64 +3,18 @@ import logging
 from typing import Dict, Any, Optional
 
 import aiohttp
-from pydantic import BaseModel, Field
+from pydantic import SecretStr
 
 from gohumanloop.core.interface import (
     HumanLoopResult, HumanLoopStatus, HumanLoopType
 )
 from gohumanloop.providers.base import BaseProvider
+from gohumanloop.models.api_model import (
+    APIResponse, HumanLoopRequestData, HumanLoopStatusParams, HumanLoopStatusResponse,
+    HumanLoopCancelData, HumanLoopCancelConversationData, HumanLoopContinueData
+)
 
 logger = logging.getLogger(__name__)
-
-# Define the data models for requests and responses
-class APIResponse(BaseModel):
-    """Base model for API responses"""
-    success: bool = Field(default=False, description="Whether the request was successful")
-    error: Optional[str] = Field(default=None, description="Error message if any")
-
-class HumanLoopRequestData(BaseModel):
-    """Model for human-in-the-loop request data"""
-    task_id: str = Field(description="Task identifier")
-    conversation_id: str = Field(description="Conversation identifier")
-    request_id: str = Field(description="Request identifier")
-    loop_type: str = Field(description="Type of loop")
-    context: Dict[str, Any] = Field(description="Context information provided to humans")
-    platform: str = Field(description="Platform being used, e.g. wechat, feishu")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
-
-class HumanLoopStatusParams(BaseModel):
-    """Model for getting human-in-the-loop status parameters"""
-    conversation_id: str = Field(description="Conversation identifier")
-    request_id: str = Field(description="Request identifier")
-    platform: str = Field(description="Platform being used")
-
-class HumanLoopStatusResponse(APIResponse):
-    """Model for human-in-the-loop status response"""
-    status: str = Field(default="pending", description="Request status")
-    response: Optional[Any] = Field(default=None, description="Human response data")
-    feedback: Optional[Any] = Field(default=None, description="Feedback data")
-    responded_by: Optional[str] = Field(default=None, description="Responder information")
-    responded_at: Optional[str] = Field(default=None, description="Response timestamp")
-
-class HumanLoopCancelData(BaseModel):
-    """Model for canceling human-in-the-loop request"""
-    conversation_id: str = Field(description="Conversation identifier")
-    request_id: str = Field(description="Request identifier")
-    platform: str = Field(description="Platform being used")
-
-class HumanLoopCancelConversationData(BaseModel):
-    """Model for canceling entire conversation"""
-    conversation_id: str = Field(description="Conversation identifier")
-    platform: str = Field(description="Platform being used")
-
-class HumanLoopContinueData(BaseModel):
-    """Model for continuing human-in-the-loop interaction"""
-    conversation_id: str = Field(description="Conversation identifier")
-    request_id: str = Field(description="Request identifier")
-    task_id: str = Field(description="Task identifier")
-    context: Dict[str, Any] = Field(description="Context information provided to humans")
-    platform: str = Field(description="Platform being used")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
 class APIProvider(BaseProvider):
     """API-based human-in-the-loop provider that supports integration with third-party service platforms
@@ -73,7 +27,7 @@ class APIProvider(BaseProvider):
         self,
         name: str,
         api_base_url: str,
-        api_key: Optional[str] = None,
+        api_key: Optional[SecretStr] = None,
         default_platform: Optional[str] = None,
         request_timeout: int = 30,
         poll_interval: int = 5,
@@ -142,7 +96,7 @@ class APIProvider(BaseProvider):
         }
         # Add authentication information
         if self.api_key:
-            request_headers["X-API-Key"] = self.api_key
+            request_headers["Authorization"] = f"Bearer {self.api_key.get_secret_value()}"
             
         # Merge custom headers
         if headers:
@@ -254,7 +208,7 @@ class APIProvider(BaseProvider):
         try:
             # Send API request
             response = await self._make_api_request(
-                endpoint="humanloop/request",
+                endpoint="v1/humanloop/request",
                 method="POST",
                 data=request_data
             )
@@ -389,7 +343,7 @@ class APIProvider(BaseProvider):
             ).model_dump()
             
             response = await self._make_api_request(
-                endpoint="humanloop/cancel",
+                endpoint="v1/humanloop/cancel",
                 method="POST",
                 data=cancel_data
             )
@@ -452,7 +406,7 @@ class APIProvider(BaseProvider):
             ).model_dump()
             
             response = await self._make_api_request(
-                endpoint="humanloop/cancel_conversation",
+                endpoint="v1/humanloop/cancel_conversation",
                 method="POST",
                 data=cancel_data
             )
@@ -553,7 +507,7 @@ class APIProvider(BaseProvider):
         try:
             # Send API request
             response = await self._make_api_request(
-                endpoint="humanloop/continue",
+                endpoint="v1/humanloop/continue",
                 method="POST",
                 data=continue_data
             )
@@ -645,7 +599,7 @@ class APIProvider(BaseProvider):
                 ).model_dump()
                 
                 response = await self._make_api_request(
-                    endpoint="humanloop/status",
+                    endpoint="v1/humanloop/status",
                     method="GET",
                     params=params
                 )

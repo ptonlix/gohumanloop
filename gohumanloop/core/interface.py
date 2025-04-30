@@ -5,33 +5,33 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 class HumanLoopStatus(Enum):
-    """枚举人机循环状态"""
+    """Enumeration of human-in-the-loop states"""
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
     EXPIRED = "expired"
     ERROR = "error"
-    COMPLETED = "completed"  # 用于非审批类交互完成
-    INPROGRESS = "inprogress"  # 用于多轮对话的中间状态，表示对话正在进行中
-    CANCELLED = "cancelled"  # 用于取消请求
+    COMPLETED = "completed"  # For completing non-approval interactions
+    INPROGRESS = "inprogress"  # Intermediate state for multi-turn dialogues, indicating ongoing conversation
+    CANCELLED = "cancelled"  # For cancelled requests
 
 class HumanLoopType(Enum):
-    """枚举人机循环类型"""
-    APPROVAL = "approval"  # 审批类型
-    INFORMATION = "information"  # 信息获取类型
-    CONVERSATION = "conversation"  # 对话类型
+    """Enumeration of human-in-the-loop types"""
+    APPROVAL = "approval"  # Approval type
+    INFORMATION = "information"  # Information gathering type
+    CONVERSATION = "conversation"  # Conversation type
 
 """
-## task_id conversation_id request_id 三者之间的关系
-1. 层次关系 ：
+## Relationship between task_id, conversation_id and request_id
+1. Hierarchical relationship:
    
-   - task_id 位于最高层，代表业务任务
-   - conversation_id 位于中间层，代表一次完整的对话会话
-   - request_id 位于最低层，代表单次交互请求
-2. 映射关系 ：
+   - task_id is at the highest level, representing business tasks
+   - conversation_id is at the middle level, representing a complete dialogue session
+   - request_id is at the lowest level, representing a single interaction request
+2. Mapping relationship:
    
-   - 一个 task_id 可能对应多个 conversation_id （一个任务可能需要多次对话）
-   - 一个 conversation_id 可能对应多个 request_id （一次对话可能包含多轮交互）
+   - One task_id may correspond to multiple conversation_ids (a task may require multiple conversations)
+   - One conversation_id may correspond to multiple request_ids (a conversation may contain multiple rounds of interaction)
 """
 @dataclass
 class HumanLoopRequest:
@@ -424,4 +424,14 @@ class HumanLoopManager(ABC):
         Returns:
             HumanLoopResult: 包含对话最新请求的状态
         """
+        pass
+
+    @abstractmethod
+    async def ashutdown(self):
+        """关闭管理器(异步方法)"""
+        pass
+
+    @abstractmethod
+    def shutdown(self):
+        """关闭管理器(同步方法)"""
         pass

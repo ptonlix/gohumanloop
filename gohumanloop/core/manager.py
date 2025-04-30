@@ -38,7 +38,9 @@ class DefaultHumanLoopManager(HumanLoopManager):
         self._conversation_requests = {}  # conversation_id -> List[request_id]
         # 存储request_id与task_id的反向映射
         self._request_task = {}  # (conversation_id, request_id) -> task_id
-        
+        # 存储对话对应的provider_id
+        self._conversation_provider = {}  # conversation_id -> provider_id
+    
     def register_provider_sync(self, provider: HumanLoopProvider, provider_id: Optional[str]) -> str:
         """同步注册提供者（用于初始化）"""
         if not provider_id:
@@ -73,6 +75,10 @@ class DefaultHumanLoopManager(HumanLoopManager):
         if not provider_id or provider_id not in self.providers:
             raise ValueError(f"Provider '{provider_id}' not found")
             
+        # 检查对话是否已存在且使用了不同的提供者
+        if conversation_id in self._conversation_provider and self._conversation_provider[conversation_id] != provider_id:
+            raise ValueError(f"Conversation '{conversation_id}' already exists with a different provider")
+            
         provider = self.providers[provider_id]
         
         # 发送请求
@@ -97,6 +103,8 @@ class DefaultHumanLoopManager(HumanLoopManager):
         self._conversation_requests[conversation_id].append(request_id)
         
         self._request_task[(conversation_id, request_id)] = task_id
+        # 存储对话对应的provider_id
+        self._conversation_provider[conversation_id] = provider_id
         
         # 如果提供了回调，存储它
         if callback:
@@ -123,8 +131,15 @@ class DefaultHumanLoopManager(HumanLoopManager):
         blocking: bool = False,
     ) -> Union[str, HumanLoopResult]:
         """继续人机循环"""
-        # 确定使用哪个提供者
-        provider_id = provider_id or self.default_provider_id
+        # 确定使用哪个提供者，优先使用对话已关联的提供者
+        if conversation_id in self._conversation_provider:
+            stored_provider_id = self._conversation_provider[conversation_id]
+            if provider_id and provider_id != stored_provider_id:
+                raise ValueError(f"Conversation '{conversation_id}' already exists with provider '{stored_provider_id}'")
+            provider_id = stored_provider_id
+        else:
+            provider_id = provider_id or self.default_provider_id
+            
         if not provider_id or provider_id not in self.providers:
             raise ValueError(f"Provider '{provider_id}' not found")
             
@@ -155,6 +170,10 @@ class DefaultHumanLoopManager(HumanLoopManager):
         if task_id:
             self._request_task[(conversation_id, request_id)] = task_id
         
+        # 存储对话对应的provider_id，如果对话不存在才存储
+        if conversation_id not in self._conversation_provider:
+            self._conversation_provider[conversation_id] = provider_id
+        
         # 如果提供了回调，存储它
         if callback:
             self._callbacks[(conversation_id, request_id)] = callback
@@ -176,7 +195,11 @@ class DefaultHumanLoopManager(HumanLoopManager):
         provider_id: Optional[str] = None
     ) -> HumanLoopResult:
         """检查请求状态"""
-        provider_id = provider_id or self.default_provider_id
+        # 如果没有指定provider_id，尝试从存储的映射中获取
+        if provider_id is None:
+            stored_provider_id = self._conversation_provider.get(conversation_id)
+            provider_id = stored_provider_id or self.default_provider_id
+            
         if not provider_id or provider_id not in self.providers:
             raise ValueError(f"Provider '{provider_id}' not found")
             
@@ -195,10 +218,15 @@ class DefaultHumanLoopManager(HumanLoopManager):
         provider_id: Optional[str] = None
     ) -> HumanLoopResult:
         """检查对话状态"""
-        provider_id = provider_id or self.default_provider_id
+        # 优先使用对话已关联的提供者
+        if provider_id is None:
+            stored_provider_id = self._conversation_provider.get(conversation_id)
+            provider_id = stored_provider_id or self.default_provider_id
+            
         if not provider_id or provider_id not in self.providers:
             raise ValueError(f"Provider '{provider_id}' not found")
             
+        #  检查对话指定provider_id或默认provider_id最后一次请求的状态
         provider = self.providers[provider_id]
         return await provider.check_conversation_status(conversation_id)
     
@@ -209,12 +237,15 @@ class DefaultHumanLoopManager(HumanLoopManager):
         provider_id: Optional[str] = None
     ) -> bool:
         """取消特定请求"""
-        provider_id = provider_id or self.default_provider_id
+        if provider_id is None:
+            stored_provider_id = self._conversation_provider.get(conversation_id)
+            provider_id = stored_provider_id or self.default_provider_id
+            
         if not provider_id or provider_id not in self.providers:
             raise ValueError(f"Provider '{provider_id}' not found")
             
         provider = self.providers[provider_id]
-        
+
         # 取消超时任务
         if (conversation_id, request_id) in self._timeout_tasks:
             self._timeout_tasks[(conversation_id, request_id)].cancel()
@@ -241,7 +272,11 @@ class DefaultHumanLoopManager(HumanLoopManager):
         provider_id: Optional[str] = None
     ) -> bool:
         """取消整个对话"""
-        provider_id = provider_id or self.default_provider_id
+        # 优先使用对话已关联的提供者
+        if provider_id is None:
+            stored_provider_id = self._conversation_provider.get(conversation_id)
+            provider_id = stored_provider_id or self.default_provider_id
+            
         if not provider_id or provider_id not in self.providers:
             raise ValueError(f"Provider '{provider_id}' not found")
             
@@ -288,6 +323,10 @@ class DefaultHumanLoopManager(HumanLoopManager):
         # 3. 清理conversation_requests映射
         if conversation_id in self._conversation_requests:
             del self._conversation_requests[conversation_id]
+            
+        # 4. 清理provider关联
+        if conversation_id in self._conversation_provider:
+            del self._conversation_provider[conversation_id]
             
         return await provider.cancel_conversation(conversation_id)
     
@@ -389,7 +428,18 @@ class DefaultHumanLoopManager(HumanLoopManager):
                     pass
 
         # 添加新方法用于获取task相关信息
-    async def get_task_conversations(self, task_id: str) -> List[str]:
+    async def aget_task_conversations(self, task_id: str) -> List[str]:
+        """获取任务关联的所有对话ID
+        
+        Args:
+            task_id: 任务ID
+            
+        Returns:
+            List[str]: 与任务关联的对话ID列表
+        """
+        return list(self._task_conversations.get(task_id, set()))
+
+    def get_task_conversations(self, task_id: str) -> List[str]:
         """获取任务关联的所有对话ID
         
         Args:
@@ -400,7 +450,18 @@ class DefaultHumanLoopManager(HumanLoopManager):
         """
         return list(self._task_conversations.get(task_id, set()))
     
-    async def get_conversation_requests(self, conversation_id: str) -> List[str]:
+    async def aget_conversation_requests(self, conversation_id: str) -> List[str]:
+        """获取对话关联的所有请求ID
+        
+        Args:
+            conversation_id: 对话ID
+            
+        Returns:
+            List[str]: 与对话关联的请求ID列表
+        """
+        return self._conversation_requests.get(conversation_id, [])
+
+    def get_conversation_requests(self, conversation_id: str) -> List[str]:
         """获取对话关联的所有请求ID
         
         Args:
@@ -423,6 +484,17 @@ class DefaultHumanLoopManager(HumanLoopManager):
         """
         return self._request_task.get((conversation_id, request_id))
 
+    async def get_conversation_provider(self, conversation_id: str) -> Optional[str]:
+        """获取请求关联的提供者ID
+        
+        Args:
+            conversation_id: 对话ID
+            
+        Returns:
+            Optional[str]: 关联的提供者ID，如果不存在则返回None
+        """
+        return self._conversation_provider.get(conversation_id)
+
     async def check_conversation_exist(
         self,
         task_id:str,
@@ -444,3 +516,9 @@ class DefaultHumanLoopManager(HumanLoopManager):
                 return True
 
         return False
+
+    async def ashutdown(self):
+       pass
+
+    def shutdown(self):
+       pass

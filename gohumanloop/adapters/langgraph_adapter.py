@@ -3,8 +3,7 @@ from functools import wraps
 import asyncio
 import uuid
 from inspect import iscoroutinefunction
-import importlib
-import time
+from contextlib import asynccontextmanager, contextmanager
 
 from gohumanloop.utils import run_async_safely
 from gohumanloop.core.interface import (
@@ -69,6 +68,59 @@ class LangGraphAdapter:
         self.manager = manager
         self.default_timeout = default_timeout
 
+    async def __aenter__(self):
+        """实现异步上下文管理器协议，自动管理manager的生命周期"""
+        if hasattr(self.manager, '__aenter__'):
+            await self.manager.__aenter__()
+        return self
+        
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """实现异步上下文管理器协议，自动管理manager的生命周期"""
+        if hasattr(self.manager, '__aexit__'):
+            await self.manager.__aexit__(exc_type, exc_val, exc_tb)
+            
+    def __enter__(self):
+        """实现同步上下文管理器协议，自动管理manager的生命周期"""
+        if hasattr(self.manager, '__enter__'):
+            self.manager.__enter__()
+        return self
+        
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """实现同步上下文管理器协议，自动管理manager的生命周期"""
+        if hasattr(self.manager, '__exit__'):
+            self.manager.__exit__(exc_type, exc_val, exc_tb)
+            
+    @asynccontextmanager
+    async def asession(self):
+        """提供异步上下文管理器，用于管理会话生命周期
+        
+        示例:
+            async with adapter.session():
+                # 在这里使用adapter
+        """
+        try:
+            if hasattr(self.manager, '__aenter__'):
+                await self.manager.__aenter__()
+            yield self
+        finally:
+            if hasattr(self.manager, '__aexit__'):
+                await self.manager.__aexit__(None, None, None)
+                
+    @contextmanager
+    def session(self):
+        """提供同步上下文管理器，用于管理会话生命周期
+        
+        示例:
+            with adapter.sync_session():
+                # 在这里使用adapter
+        """
+        try:
+            if hasattr(self.manager, '__enter__'):
+                self.manager.__enter__()
+            yield self
+        finally:
+            if hasattr(self.manager, '__exit__'):
+                self.manager.__exit__(None, None, None)
 
     def require_approval(
         self,
@@ -76,6 +128,7 @@ class LangGraphAdapter:
         conversation_id: Optional[str] = None,
         ret_key: str = "approval_result",
         additional: Optional[str] = "",
+        metadata: Optional[Dict[str, Any]] = None,
         timeout: Optional[int] = None,
         execute_on_reject: bool = False,
         callback: Optional[Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]] = None,
@@ -87,7 +140,7 @@ class LangGraphAdapter:
             conversation_id = str(uuid.uuid4())
             
         def decorator(fn):
-            return self._approve_cli(fn, task_id, conversation_id, ret_key, additional, timeout, execute_on_reject, callback)
+            return self._approve_cli(fn, task_id, conversation_id, ret_key, additional, metadata, timeout, execute_on_reject, callback)
         return HumanLoopWrapper(decorator)
 
     def _approve_cli(
@@ -97,6 +150,7 @@ class LangGraphAdapter:
         conversation_id: str,
         ret_key: str = "approval_result",
         additional: Optional[str] = "",
+        metadata: Optional[Dict[str, Any]] = None,
         timeout: Optional[int] = None,
         execute_on_reject: bool = False,
         callback: Optional[Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]] = None,
@@ -143,6 +197,7 @@ Documentation: {fn.__doc__ or "No documentation available"}
                     "additional": additional
                 },
                 callback=cb,
+                metadata=metadata,
                 timeout=timeout or self.default_timeout,
                 blocking=True
             )
@@ -201,6 +256,7 @@ Documentation: {fn.__doc__ or "No documentation available"}
         state_key: str = "conv_info",
         ret_key: str = "conv_result",
         additional: Optional[str] = "",
+        metadata: Optional[Dict[str, Any]] = None,
         timeout: Optional[int] = None,
         callback: Optional[Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]] = None,
     ) -> HumanLoopWrapper:
@@ -212,7 +268,7 @@ Documentation: {fn.__doc__ or "No documentation available"}
             conversation_id = str(uuid.uuid4())
 
         def decorator(fn):
-            return self._conversation_cli(fn, task_id, conversation_id, state_key, ret_key, additional, timeout, callback)
+            return self._conversation_cli(fn, task_id, conversation_id, state_key, ret_key, additional, metadata, timeout, callback)
         return HumanLoopWrapper(decorator)
 
     def _conversation_cli(
@@ -223,6 +279,7 @@ Documentation: {fn.__doc__ or "No documentation available"}
         state_key: str = "conv_info",
         ret_key: str = "conv_result",
         additional: Optional[str] = "",
+        metadata: Optional[Dict[str, Any]] = None,
         timeout: Optional[int] = None,
         callback: Optional[Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]] = None,
     ) -> Callable[[T], R | None]:
@@ -267,6 +324,7 @@ Documentation: {fn.__doc__ or "No documentation available"}
                     },
                     timeout=timeout or self.default_timeout,
                     callback=cb,
+                    metadata=metadata,
                     blocking=True
                 )
             else:
@@ -288,6 +346,7 @@ Documentation: {fn.__doc__ or "No documentation available"}
                     },
                     timeout=timeout or self.default_timeout,
                     callback=cb,
+                    metadata=metadata,
                     blocking=True
                 )
 
@@ -330,6 +389,7 @@ Documentation: {fn.__doc__ or "No documentation available"}
         conversation_id: Optional[str] = None,
         ret_key: str = "info_result",
         additional: Optional[str] = "",
+        metadata: Optional[Dict[str, Any]] = None,  
         timeout: Optional[int] = None,
         callback: Optional[Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]] = None,
     ) -> HumanLoopWrapper:
@@ -341,7 +401,7 @@ Documentation: {fn.__doc__ or "No documentation available"}
             conversation_id = str(uuid.uuid4())
 
         def decorator(fn):
-            return self._get_info_cli(fn, task_id, conversation_id, ret_key, additional, timeout, callback)
+            return self._get_info_cli(fn, task_id, conversation_id, ret_key, additional, metadata, timeout, callback)
         return HumanLoopWrapper(decorator)
 
     def _get_info_cli(
@@ -351,6 +411,7 @@ Documentation: {fn.__doc__ or "No documentation available"}
         conversation_id: str,
         ret_key: str = "info_result",
         additional: Optional[str] = "",
+        metadata: Optional[Dict[str, Any]] = None,
         timeout: Optional[int] = None,
         callback: Optional[Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]] = None,
     ) -> Callable[[T], R | None]:
@@ -408,6 +469,7 @@ Documentation: {fn.__doc__ or "No documentation available"}
                 },
                 timeout=timeout or self.default_timeout,
                 callback=cb,
+                metadata=metadata,
                 blocking=True
             )
 
