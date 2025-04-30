@@ -26,7 +26,6 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
     
     def __init__(
         self,
-        name: str = "GoHumanLoop",
         request_timeout: int = 30,
         poll_interval: int = 5,
         max_retries: int = 3,
@@ -39,7 +38,6 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
         初始化 GoHumanLoop 管理器
         
         Args:
-            name: 提供者名称
             request_timeout: API 请求超时时间（秒）
             poll_interval: 轮询间隔（秒）
             max_retries: 最大重试次数
@@ -59,10 +57,10 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
             api_base_url=api_base_url
         )
         
-        
+        self.name = "GoHumanLoop"
         # 创建 GoHumanLoop 提供者
         ghl_provider = GoHumanLoopProvider(
-            name=name,
+            name=self.name,
             request_timeout=request_timeout,
             poll_interval=poll_interval,
             max_retries=max_retries,
@@ -78,7 +76,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
         super().__init__(initial_providers=providers)
         
         # 设置 GoHumanLoop 提供者为默认提供者
-        self.default_provider_id = name
+        self.default_provider_id = self.name
         
         # 存储最近同步时间
         self._last_sync_time = time.time()

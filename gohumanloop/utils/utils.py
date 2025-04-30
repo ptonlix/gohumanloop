@@ -3,7 +3,7 @@ import os
 from typing import Optional, Union
 from pydantic import SecretStr
 def run_async_safely(coro):
-    """安全地运行异步协程，避免事件循环冲突"""
+    """同步环境下安全地运行异步协程，避免事件循环冲突"""
     try:
         loop = asyncio.get_event_loop()
     except RuntimeError:

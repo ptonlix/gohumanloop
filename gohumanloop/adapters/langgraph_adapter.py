@@ -129,6 +129,7 @@ class LangGraphAdapter:
         ret_key: str = "approval_result",
         additional: Optional[str] = "",
         metadata: Optional[Dict[str, Any]] = None,
+        provider_id: Optional[str] = None,
         timeout: Optional[int] = None,
         execute_on_reject: bool = False,
         callback: Optional[Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]] = None,
@@ -140,7 +141,7 @@ class LangGraphAdapter:
             conversation_id = str(uuid.uuid4())
             
         def decorator(fn):
-            return self._approve_cli(fn, task_id, conversation_id, ret_key, additional, metadata, timeout, execute_on_reject, callback)
+            return self._approve_cli(fn, task_id, conversation_id, ret_key, additional, metadata, provider_id,  timeout, execute_on_reject, callback)
         return HumanLoopWrapper(decorator)
 
     def _approve_cli(
@@ -151,6 +152,7 @@ class LangGraphAdapter:
         ret_key: str = "approval_result",
         additional: Optional[str] = "",
         metadata: Optional[Dict[str, Any]] = None,
+        provider_id: Optional[str] = None,
         timeout: Optional[int] = None,
         execute_on_reject: bool = False,
         callback: Optional[Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]] = None,
@@ -198,6 +200,7 @@ Documentation: {fn.__doc__ or "No documentation available"}
                 },
                 callback=cb,
                 metadata=metadata,
+                provider_id=provider_id,
                 timeout=timeout or self.default_timeout,
                 blocking=True
             )
@@ -256,6 +259,7 @@ Documentation: {fn.__doc__ or "No documentation available"}
         state_key: str = "conv_info",
         ret_key: str = "conv_result",
         additional: Optional[str] = "",
+        provider_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
         timeout: Optional[int] = None,
         callback: Optional[Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]] = None,
@@ -268,7 +272,7 @@ Documentation: {fn.__doc__ or "No documentation available"}
             conversation_id = str(uuid.uuid4())
 
         def decorator(fn):
-            return self._conversation_cli(fn, task_id, conversation_id, state_key, ret_key, additional, metadata, timeout, callback)
+            return self._conversation_cli(fn, task_id, conversation_id, state_key, ret_key, additional, provider_id, metadata, timeout, callback)
         return HumanLoopWrapper(decorator)
 
     def _conversation_cli(
@@ -280,6 +284,7 @@ Documentation: {fn.__doc__ or "No documentation available"}
         ret_key: str = "conv_result",
         additional: Optional[str] = "",
         metadata: Optional[Dict[str, Any]] = None,
+        provider_id: Optional[str] = None,
         timeout: Optional[int] = None,
         callback: Optional[Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]] = None,
     ) -> Callable[[T], R | None]:
@@ -325,6 +330,7 @@ Documentation: {fn.__doc__ or "No documentation available"}
                     timeout=timeout or self.default_timeout,
                     callback=cb,
                     metadata=metadata,
+                    provider_id=provider_id,
                     blocking=True
                 )
             else:
@@ -347,6 +353,7 @@ Documentation: {fn.__doc__ or "No documentation available"}
                     timeout=timeout or self.default_timeout,
                     callback=cb,
                     metadata=metadata,
+                    provider_id=provider_id,
                     blocking=True
                 )
 
@@ -389,7 +396,8 @@ Documentation: {fn.__doc__ or "No documentation available"}
         conversation_id: Optional[str] = None,
         ret_key: str = "info_result",
         additional: Optional[str] = "",
-        metadata: Optional[Dict[str, Any]] = None,  
+        metadata: Optional[Dict[str, Any]] = None,
+        provider_id: Optional[str] = None,
         timeout: Optional[int] = None,
         callback: Optional[Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]] = None,
     ) -> HumanLoopWrapper:
@@ -401,7 +409,7 @@ Documentation: {fn.__doc__ or "No documentation available"}
             conversation_id = str(uuid.uuid4())
 
         def decorator(fn):
-            return self._get_info_cli(fn, task_id, conversation_id, ret_key, additional, metadata, timeout, callback)
+            return self._get_info_cli(fn, task_id, conversation_id, ret_key, additional, metadata, provider_id, timeout, callback)
         return HumanLoopWrapper(decorator)
 
     def _get_info_cli(
@@ -412,6 +420,7 @@ Documentation: {fn.__doc__ or "No documentation available"}
         ret_key: str = "info_result",
         additional: Optional[str] = "",
         metadata: Optional[Dict[str, Any]] = None,
+        provider_id: Optional[str] = None,
         timeout: Optional[int] = None,
         callback: Optional[Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]] = None,
     ) -> Callable[[T], R | None]:
@@ -470,6 +479,7 @@ Documentation: {fn.__doc__ or "No documentation available"}
                 timeout=timeout or self.default_timeout,
                 callback=cb,
                 metadata=metadata,
+                provider_id=provider_id,
                 blocking=True
             )
 
@@ -660,7 +670,6 @@ def interrupt(value: Any, lg_humanloop: LangGraphAdapter = default_adapter) -> A
     # 返回LangGraph的interrupt
     return _lg_interrupt(value)
 
-# 修改 create_resume_command 函数
 def create_resume_command(lg_humanloop: LangGraphAdapter = default_adapter) -> Any:
     """
     创建用于恢复被中断图执行的Command对象
@@ -671,7 +680,7 @@ def create_resume_command(lg_humanloop: LangGraphAdapter = default_adapter) -> A
         lg_humanloop: LangGraphAdapter实例，默认使用全局实例
         
     返回:
-        Command对象，可用于graph.invoke方法
+        Command对象，可用于graph.stream方法
     """
     if not _SUPPORTS_INTERRUPT:
         raise RuntimeError(
@@ -692,5 +701,38 @@ def create_resume_command(lg_humanloop: LangGraphAdapter = default_adapter) -> A
     
     # 同步等待异步结果
     response = run_async_safely(poll_for_result())
+    return _lg_Command(resume=response)
+
+async def acreate_resume_command(lg_humanloop: LangGraphAdapter = default_adapter) -> Any:
+    """
+    创建用于恢复被中断图执行的Command对象的异步版本
+    
+    如果LangGraph版本不支持Command，将抛出RuntimeError
+    
+    参数:
+        lg_humanloop: LangGraphAdapter实例，默认使用全局实例
+        
+    返回:
+        Command对象，可用于graph.astream方法
+    """
+    if not _SUPPORTS_INTERRUPT:
+        raise RuntimeError(
+            "LangGraph版本过低，不支持Command功能。请升级到0.2.57或更高版本。"
+            "可以使用: pip install --upgrade langgraph>=0.2.57"
+        )
+
+    # 定义异步轮询函数
+    async def poll_for_result():
+        poll_interval = 1.0  # 轮询间隔（秒）
+        while True:
+            result = await lg_humanloop.manager.check_conversation_status(default_conversation_id)
+            # 如果状态是最终状态（非PENDING），返回结果
+            if result.status != HumanLoopStatus.PENDING:
+                return result.response
+            # 等待一段时间后再次轮询
+            await asyncio.sleep(poll_interval)
+    
+    # 直接等待异步结果
+    response = await poll_for_result()
     return _lg_Command(resume=response)
     

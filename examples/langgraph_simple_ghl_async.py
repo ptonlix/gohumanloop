@@ -33,7 +33,6 @@ class SimpleState(TypedDict):
 
 # 创建 GoHumanLoopManager 实例
 manager = GoHumanLoopManager(
-    name="GoHumanLoop",
     request_timeout=30,
     poll_interval=5,
     auto_start_sync=True
@@ -51,7 +50,7 @@ adapter = LangGraphAdapter(
     additional="这是一个简单的审批示例。",
     execute_on_reject=True
 )
-async def human_approval_node(state: SimpleState, approval_result=None) -> SimpleState:
+def human_approval_node(state: SimpleState, approval_result=None) -> SimpleState:
     """需要人工审批的节点"""
     print("等待人工审批中...")
     
@@ -73,7 +72,7 @@ async def human_approval_node(state: SimpleState, approval_result=None) -> Simpl
     
     return state
 
-async def final_node(state: SimpleState) -> SimpleState:
+def final_node(state: SimpleState) -> SimpleState:
     """最终节点"""
     state["messages"].append({
         "role": "system",
@@ -99,14 +98,12 @@ def build_simple_graph():
     
     return graph.compile()
 
+# 构建工作流图
+workflow = build_simple_graph()
+
 # 运行工作流
 async def run_simple_workflow():
     """运行简单工作流"""
-    # 构建工作流图
-    # 创建 GoHumanLoopManager 实例
-
-    workflow = build_simple_graph()
-    
     # 初始化状态
     initial_state = SimpleState(
         messages=[
