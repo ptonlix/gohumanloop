@@ -95,7 +95,6 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
         self._sync_thread_stop_event = threading.Event()
         
         # 启动数据同步任务
-        self.start_sync_task()
         if auto_start_sync:
             # 判断是否处在异步环境
             if asyncio.get_event_loop().is_running():

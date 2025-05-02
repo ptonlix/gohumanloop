@@ -188,13 +188,13 @@ class LangGraphAdapter:
                 conversation_id=conversation_id,
                 loop_type=HumanLoopType.APPROVAL,
                 context={
-                    "message": f"""
-Function Name: {fn.__name__}
-Function Signature: {str(fn.__code__.co_varnames)}
-Arguments: {str(args)}
-Keyword Arguments: {str(kwargs)}
-Documentation: {fn.__doc__ or "No documentation available"}
-""",
+                    "message": {
+                        "function_name": fn.__name__,
+                        "function_signature": str(fn.__code__.co_varnames),
+                        "arguments": str(args),
+                        "keyword_arguments": str(kwargs),
+                        "documentation": fn.__doc__ or "No documentation available"
+                    },
                     "question": "Please review and approve/reject this human loop execution.",
                     "additional": additional
                 },
@@ -239,9 +239,10 @@ Documentation: {fn.__doc__ or "No documentation available"}
                     # 否则返回拒绝信息
                     reason = result.response
                     raise ValueError(f"Function {fn.__name__} execution not approved: {reason}")
-                
+                else:
+                    raise ValueError(f"Approval error for {fn.__name__}: approval status: {result.status} and {result.error}")
             else:
-                raise ValueError(f"Approval timeout or error for {fn.__name__}")
+                raise ValueError(f"Unknown approval error: {fn.__name__}")
 
         @wraps(fn)
         def sync_wrapper(*args, **kwargs) -> R | None:
@@ -317,13 +318,13 @@ Documentation: {fn.__doc__ or "No documentation available"}
                 result = await self.manager.continue_humanloop(
                     conversation_id=conversation_id,
                     context={
-                        "message": f"""
-Function Name: {fn.__name__}
-Function Signature: {str(fn.__code__.co_varnames)}
-Arguments: {str(args)}
-Keyword Arguments: {str(kwargs)}
-Documentation: {fn.__doc__ or "No documentation available"}
-""",
+                        "message": {
+                        "function_name": fn.__name__,
+                        "function_signature": str(fn.__code__.co_varnames),
+                        "arguments": str(args),
+                        "keyword_arguments": str(kwargs),
+                        "documentation": fn.__doc__ or "No documentation available"
+                        },
                         "question": question_content,
                         "additional": additional
                     },
@@ -340,13 +341,13 @@ Documentation: {fn.__doc__ or "No documentation available"}
                     conversation_id=conversation_id,
                     loop_type=HumanLoopType.CONVERSATION,
                     context={
-                        "message": f"""
-Function Name: {fn.__name__}
-Function Signature: {str(fn.__code__.co_varnames)}
-Arguments: {str(args)}
-Keyword Arguments: {str(kwargs)}
-Documentation: {fn.__doc__ or "No documentation available"}
-""",
+                        "message": {
+                        "function_name": fn.__name__,
+                        "function_signature": str(fn.__code__.co_varnames),
+                        "arguments": str(args),
+                        "keyword_arguments": str(kwargs),
+                        "documentation": fn.__doc__ or "No documentation available"
+                        },
                         "question": question_content,
                         "additional": additional
                     },
@@ -466,13 +467,13 @@ Documentation: {fn.__doc__ or "No documentation available"}
                 conversation_id=conversation_id,
                 loop_type=HumanLoopType.INFORMATION,
                 context={
-                    "message": f"""
-Function Name: {fn.__name__}
-Function Signature: {str(fn.__code__.co_varnames)}
-Arguments: {str(args)}
-Keyword Arguments: {str(kwargs)}
-Documentation: {fn.__doc__ or "No documentation available"}
-""",
+                    "message": {
+                        "function_name": fn.__name__,
+                        "function_signature": str(fn.__code__.co_varnames),
+                        "arguments": str(args),
+                        "keyword_arguments": str(kwargs),
+                        "documentation": fn.__doc__ or "No documentation available"
+                    },
                     "question": "Please provide the required information for the human loop",
                     "additional": additional
                 },

@@ -12,7 +12,6 @@ import logging
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
 from pydantic import SecretStr
-from pydantic_core.core_schema import str_schema
 
 from gohumanloop.core.interface import ( HumanLoopResult, HumanLoopStatus, HumanLoopType
 )
@@ -227,9 +226,7 @@ class EmailProvider(BaseProvider):
                 await asyncio.sleep(self.check_interval)
             except Exception as e:
                 logger.error(f"Failed to check emails: {str(e)}", exc_info=True)
-                if request_key in self._requests:
-                    self._requests[request_key]["status"] = HumanLoopStatus.ERROR 
-                    self._requests[request_key]["error"] = f"Failed to check emails: {str(e)}"
+                self._update_request_status_error(conversation_id, request_id, f"Failed to check emails: {str(e)}")
                 break
                 
     def _decode_email_header(self, header_value: str) -> str:
@@ -632,23 +629,18 @@ class EmailProvider(BaseProvider):
         
         # 生成请求ID
         request_id = self._generate_request_id()
+
+        
+
         
         # 获取收件人邮箱
         recipient_email = metadata.get("recipient_email")
-        if not recipient_email:
-            return HumanLoopResult(
-                conversation_id=conversation_id,
-                request_id=request_id,
-                loop_type=loop_type,
-                status=HumanLoopStatus.ERROR,
-                error="Recipient email address is missing"
-            )
-            
+
         # 生成邮件主题
         subject_prefix = metadata.get("subject_prefix", f"[{self.name}]")
         subject = metadata.get("subject", f"{subject_prefix} Task {task_id}")
-        
-         # 存储请求信息
+
+                # 存储请求信息
         self._store_request(
             conversation_id=conversation_id,
             request_id=request_id,
@@ -659,6 +651,16 @@ class EmailProvider(BaseProvider):
             timeout=timeout
         )
 
+        if not recipient_email:
+            self._update_request_status_error(conversation_id, request_id, "Recipient email address is missing")
+            return HumanLoopResult(
+                conversation_id=conversation_id,
+                request_id=request_id,
+                loop_type=loop_type,
+                status=HumanLoopStatus.ERROR,
+                error="Recipient email address is missing"
+            )
+            
         # 构建邮件内容
         prompt = self.build_prompt(
             task_id=task_id,
@@ -685,10 +687,7 @@ class EmailProvider(BaseProvider):
         
         if not success:
             # Update request status to error
-            request_key = (conversation_id, request_id)
-            if request_key in self._requests:
-                self._requests[request_key]["status"] = HumanLoopStatus.ERROR
-                self._requests[request_key]["error"] = "Failed to send email"
+            self._update_request_status_error(conversation_id, request_id, "Failed to send email")
                 
             return HumanLoopResult(
                 conversation_id=conversation_id,
@@ -803,9 +802,23 @@ class EmailProvider(BaseProvider):
         
         # 获取任务ID
         task_id = conversation_info.get("task_id", "unknown_task")
+
+        # 存储请求信息
+        self._store_request(
+            conversation_id=conversation_id,
+            request_id=request_id,
+            task_id=task_id,
+            loop_type=HumanLoopType.CONVERSATION,  # 继续对话默认为对话类型
+            context=context,
+            metadata=metadata or {},
+            timeout=timeout
+        )
+
+
          # 获取收件人邮箱
         recipient_email = metadata.get("recipient_email")
         if not recipient_email:
+            self._update_request_status_error(conversation_id, request_id, "Recipient email address is missing")
             return HumanLoopResult(
                 conversation_id=conversation_id,
                 request_id=request_id,
@@ -826,16 +839,6 @@ class EmailProvider(BaseProvider):
                     if "subject" in last_metadata:
                         subject = last_metadata["subject"]
                         metadata["subject"] = subject # 保持相同主题
-        # 存储请求信息
-        self._store_request(
-            conversation_id=conversation_id,
-            request_id=request_id,
-            task_id=task_id,
-            loop_type=HumanLoopType.CONVERSATION,  # 继续对话默认为对话类型
-            context=context,
-            metadata=metadata or {},
-            timeout=timeout
-        )
 
         # 构建邮件内容
         prompt = self.build_prompt(
@@ -861,10 +864,7 @@ class EmailProvider(BaseProvider):
         
         if not success:
             # Update request status to error
-            request_key = (conversation_id, request_id)
-            if request_key in self._requests:
-                self._requests[request_key]["status"] = HumanLoopStatus.ERROR
-                self._requests[request_key]["error"] = "Failed to send email"
+            self._update_request_status_error(conversation_id, request_id, "Failed to send email")
                 
             return HumanLoopResult(
                 conversation_id=conversation_id,

@@ -1,4 +1,5 @@
 from abc import ABC
+import re
 from typing import Dict, Any, Optional, List
 import asyncio
 import json
@@ -48,6 +49,18 @@ class BaseProvider(HumanLoopProvider, ABC):
     def _generate_request_id(self) -> str:
         """Generates a unique request ID"""
         return str(uuid.uuid4())
+
+    def _update_request_status_error(
+        self,
+        conversation_id: str,
+        request_id: str,
+        error: Optional[str] = None,
+    ):
+        """Update request status"""
+        request_key = (conversation_id, request_id)
+        if request_key in self._requests:
+            self._requests[request_key]["status"] = HumanLoopStatus.ERROR
+            self._requests[request_key]["error"] = error
         
     def _store_request(
         self,
