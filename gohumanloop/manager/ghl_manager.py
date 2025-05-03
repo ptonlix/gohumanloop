@@ -23,27 +23,27 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
     1. 管理整个人机交互任务
     2. 将交互任务数据统一传输到 GoHumanLoop 平台
     """
-    
     def __init__(
         self,
-        request_timeout: int = 30,
+        request_timeout: int = 60,
         poll_interval: int = 5,
         max_retries: int = 3,
         sync_interval: int = 60,  # 数据同步间隔（秒）
         additional_providers: Optional[List[HumanLoopProvider]] = None,
-        auto_start_sync: bool = False, # 是否自动启动数据同步任务
+        auto_start_sync: bool = True, # 是否自动启动数据同步任务
         config: Optional[Dict[str, Any]] = None,
     ):
         """
         初始化 GoHumanLoop 管理器
         
         Args:
-            request_timeout: API 请求超时时间（秒）
-            poll_interval: 轮询间隔（秒）
-            max_retries: 最大重试次数
-            sync_interval: 数据同步间隔（秒）
-            config: 附加配置参数
-            additional_providers: 额外的提供者列表
+            request_timeout: API 请求超时时间（秒），默认60秒
+            poll_interval: 轮询检查请求状态的时间间隔（秒），默认5秒
+            max_retries: API 请求失败时的最大重试次数，默认3次
+            sync_interval: 数据同步到平台的时间间隔（秒），默认60秒
+            additional_providers: 额外的人机交互提供者列表，可选
+            auto_start_sync: 是否在初始化时自动启动数据同步任务，默认为True
+            config: 附加配置参数字典，可选
         """
          # Get API key from environment variables (if not provided)
         api_key = get_secret_from_env("GOHUMANLOOP_API_KEY")
@@ -444,6 +444,35 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
         provider = self.providers[provider_id]
         return await provider.check_request_status(conversation_id, request_id)
 
+    async def check_request_status(
+        self,
+        conversation_id: str,
+        request_id: str,
+        provider_id: Optional[str] = None
+    ) -> HumanLoopResult:
+        """
+        重写父类方法，增加数据同步操作
+        """
+        # 如果没有指定provider_id，尝试从存储的映射中获取
+        if provider_id is None:
+            stored_provider_id = self._conversation_provider.get(conversation_id)
+            provider_id = stored_provider_id or self.default_provider_id
+            
+        if not provider_id or provider_id not in self.providers:
+            raise ValueError(f"Provider '{provider_id}' not found")
+            
+        provider = self.providers[provider_id]
+        result = await provider.check_request_status(conversation_id, request_id)
+        
+        # 如果有回调且状态不是等待或进行中
+        if result.status not in [HumanLoopStatus.PENDING]:
+            # 同步数据到平台
+            await self.async_data_to_platform()
+            # 触发状态更新回调
+            if (conversation_id, request_id) in self._callbacks:
+                await self._trigger_update_callback(conversation_id, request_id, provider, result)
+
+        return result
     
     def shutdown(self):
         """

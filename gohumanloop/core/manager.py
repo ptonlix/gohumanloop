@@ -368,7 +368,7 @@ class DefaultHumanLoopManager(HumanLoopManager):
         async def timeout_task():
             await asyncio.sleep(timeout)
             # 检查当前状态
-            result = await provider.check_request_status(conversation_id, request_id)
+            result = await self.check_request_status(conversation_id, request_id, provider.name)
             
             # 只有当状态为PENDING时才触发超时回调
             # INPROGRESS状态表示对话正在进行中，不应视为超时
@@ -399,7 +399,7 @@ class DefaultHumanLoopManager(HumanLoopManager):
         poll_interval = 1.0  # 轮询间隔（秒）
         
         while True:
-            result = await provider.check_request_status(conversation_id, request_id)
+            result = await self.check_request_status(conversation_id, request_id, provider.name)
             
             # 如果状态是最终状态（非PENDING），返回结果
             if result.status != HumanLoopStatus.PENDING:
