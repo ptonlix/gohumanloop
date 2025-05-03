@@ -93,6 +93,9 @@ class DefaultHumanLoopManager(HumanLoopManager):
         
         request_id = result.request_id
         
+        if not request_id:
+            raise ValueError(f"Failed to request humanloop for conversation '{conversation_id}'")
+        
         # 存储task_id、conversation_id和request_id的关系
         if task_id not in self._task_conversations:
             self._task_conversations[task_id] = set()
@@ -154,6 +157,9 @@ class DefaultHumanLoopManager(HumanLoopManager):
         )
         
         request_id = result.request_id
+
+        if not request_id:
+            raise ValueError(f"Failed to continue humanloop for conversation '{conversation_id}'")
         
         # 更新conversation_id和request_id的关系
         if conversation_id not in self._conversation_requests:

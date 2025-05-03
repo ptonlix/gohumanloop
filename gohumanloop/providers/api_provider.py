@@ -172,17 +172,7 @@ class APIProvider(BaseProvider):
         
         # Generate request ID
         request_id = self._generate_request_id()
-        
-        # Determine which platform to use
         platform = metadata.get("platform", self.default_platform)
-        if not platform:
-            return HumanLoopResult(
-                conversation_id=conversation_id,
-                request_id=request_id,
-                loop_type=loop_type,
-                status=HumanLoopStatus.ERROR,
-                error="Platform not specified. Please set 'platform' in metadata or set default_platform during initialization"
-            )
         # Store request information
         self._store_request(
             conversation_id=conversation_id,
@@ -193,6 +183,17 @@ class APIProvider(BaseProvider):
             metadata={**metadata, "platform": platform},
             timeout=timeout
         )
+        
+        # Determine which platform to use
+        if not platform:
+            self._update_request_status_error(conversation_id, request_id, "Platform not specified. Please set 'platform' in metadata or set default_platform during initialization")
+            return HumanLoopResult(
+                conversation_id=conversation_id,
+                request_id=request_id,
+                loop_type=loop_type,
+                status=HumanLoopStatus.ERROR,
+                error="Platform not specified. Please set 'platform' in metadata or set default_platform during initialization"
+            )
         
         # Prepare API request data
         request_data = HumanLoopRequestData(
@@ -217,13 +218,9 @@ class APIProvider(BaseProvider):
             api_response = APIResponse(**response)
             if not api_response.success:
                 error_msg = api_response.error or "API request failed without error message"
-                
                 # Update request status to error
-                request_key = (conversation_id, request_id)
-                if request_key in self._requests:
-                    self._requests[request_key]["status"] = HumanLoopStatus.ERROR
-                    self._requests[request_key]["error"] = error_msg
-                    
+                self._update_request_status_error(conversation_id, request_id, error_msg) 
+                
                 return HumanLoopResult(
                     conversation_id=conversation_id,
                     request_id=request_id,
@@ -251,12 +248,8 @@ class APIProvider(BaseProvider):
             
         except Exception as e:
             logger.error(f"Failed to request human-in-the-loop: {str(e)}")
-            
             # Update request status to error
-            request_key = (conversation_id, request_id)
-            if request_key in self._requests:
-                self._requests[request_key]["status"] = HumanLoopStatus.ERROR
-                self._requests[request_key]["error"] = str(e)
+            self._update_request_status_error(conversation_id, request_id, str(e)) 
                 
             return HumanLoopResult(
                 conversation_id=conversation_id,
@@ -429,6 +422,8 @@ class APIProvider(BaseProvider):
         except Exception as e:
             logger.error(f"Cancel conversation failed: {str(e)}")
             return False
+
+
     async def continue_humanloop(
         self,
         conversation_id: str,
@@ -464,25 +459,10 @@ class APIProvider(BaseProvider):
         request_id = self._generate_request_id()
         
         # Get task ID
-        task_id = conversation_info.get("task_id")
-        if not task_id:
-            return HumanLoopResult(
-                conversation_id=conversation_id,
-                request_id=request_id,
-                loop_type=HumanLoopType.CONVERSATION,
-                status=HumanLoopStatus.ERROR,
-                error=f"Task ID not found in conversation '{conversation_id}'"
-            )
+        task_id = conversation_info.get("task_id", "unknown_task")
         # Determine which platform to use
         platform = metadata.get("platform", self.default_platform)
-        if not platform:
-            return HumanLoopResult(
-                conversation_id=conversation_id,
-                request_id=request_id,
-                loop_type=HumanLoopType.CONVERSATION,
-                status=HumanLoopStatus.ERROR,
-                error="Platform not specified. Please set 'platform' in metadata or set default_platform during initialization"
-            )
+
         # Store request information
         self._store_request(
             conversation_id=conversation_id,
@@ -493,6 +473,16 @@ class APIProvider(BaseProvider):
             metadata={**metadata, "platform": platform},
             timeout=timeout
         )
+
+        if not platform:
+            self._update_request_status_error(conversation_id, request_id, "Platform not specified. Please set 'platform' in metadata or set default_platform during initialization")
+            return HumanLoopResult(
+                conversation_id=conversation_id,
+                request_id=request_id,
+                loop_type=HumanLoopType.CONVERSATION,
+                status=HumanLoopStatus.ERROR,
+                error="Platform not specified. Please set 'platform' in metadata or set default_platform during initialization"
+            )
         
         # Prepare API request data
         continue_data = HumanLoopContinueData(
@@ -517,12 +507,7 @@ class APIProvider(BaseProvider):
             if not api_response.success:
                 error_msg = api_response.error or "Continue conversation failed without error message"
                 
-                # Update request status to error
-                request_key = (conversation_id, request_id)
-                if request_key in self._requests:
-                    self._requests[request_key]["status"] = HumanLoopStatus.ERROR
-                    self._requests[request_key]["error"] = error_msg
-                    
+                self._update_request_status_error(conversation_id, request_id, error_msg)
                 return HumanLoopResult(
                     conversation_id=conversation_id,
                     request_id=request_id,
@@ -550,12 +535,8 @@ class APIProvider(BaseProvider):
             
         except Exception as e:
             logger.error(f"Failed to continue human-in-the-loop: {str(e)}")
-            
-            # Update request status to error
-            request_key = (conversation_id, request_id)
-            if request_key in self._requests:
-                self._requests[request_key]["status"] = HumanLoopStatus.ERROR
-                self._requests[request_key]["error"] = str(e)
+            self._update_request_status_error(conversation_id, request_id, str(e))
+
                 
             return HumanLoopResult(
                 conversation_id=conversation_id,

@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 import random
-import uuid
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 

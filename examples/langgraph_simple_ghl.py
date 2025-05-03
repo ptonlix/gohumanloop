@@ -32,15 +32,7 @@ class SimpleState(TypedDict):
     approval_result: Dict[str, Any]
 
 # 创建 GoHumanLoopManager 实例
-manager = GoHumanLoopManager(
-    name="GoHumanLoop",
-    request_timeout=30,
-    poll_interval=5,
-    config={
-        "api_base_url": "http://localhost:8000",
-        "api_key": "gohumanloop"
-    }
-)
+manager = GoHumanLoopManager()
 
 # 创建 LangGraphAdapter 实例
 adapter = LangGraphAdapter(
