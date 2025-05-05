@@ -81,47 +81,57 @@ class DefaultHumanLoopManager(HumanLoopManager):
             
         provider = self.providers[provider_id]
         
-        # 发送请求
-        result = await provider.request_humanloop(
-            task_id=task_id,
-            conversation_id=conversation_id,
-            loop_type=loop_type,
-            context=context,
-            metadata=metadata,
-            timeout=timeout
-        )
-        
-        request_id = result.request_id
-        
-        if not request_id:
-            raise ValueError(f"Failed to request humanloop for conversation '{conversation_id}'")
-        
-        # 存储task_id、conversation_id和request_id的关系
-        if task_id not in self._task_conversations:
-            self._task_conversations[task_id] = set()
-        self._task_conversations[task_id].add(conversation_id)
-        
-        if conversation_id not in self._conversation_requests:
-            self._conversation_requests[conversation_id] = []
-        self._conversation_requests[conversation_id].append(request_id)
-        
-        self._request_task[(conversation_id, request_id)] = task_id
-        # 存储对话对应的provider_id
-        self._conversation_provider[conversation_id] = provider_id
-        
-        # 如果提供了回调，存储它
-        if callback:
-            self._callbacks[(conversation_id, request_id)] = callback
+        try:
+            # 发送请求
+            result = await provider.request_humanloop(
+                task_id=task_id,
+                conversation_id=conversation_id,
+                loop_type=loop_type,
+                context=context,
+                metadata=metadata,
+                timeout=timeout
+            )
             
-        # 如果设置了超时，创建超时任务
-        if timeout:
-            self._create_timeout_task(conversation_id, request_id, timeout, provider, callback)
+            request_id = result.request_id
             
-        # 如果是阻塞模式，等待结果
-        if blocking:
-            return await self._wait_for_result(conversation_id, request_id, provider, timeout)
-        else:
-            return request_id
+            if not request_id:
+                raise ValueError(f"Failed to request humanloop for conversation '{conversation_id}'")
+            
+            # 存储task_id、conversation_id和request_id的关系
+            if task_id not in self._task_conversations:
+                self._task_conversations[task_id] = set()
+            self._task_conversations[task_id].add(conversation_id)
+            
+            if conversation_id not in self._conversation_requests:
+                self._conversation_requests[conversation_id] = []
+            self._conversation_requests[conversation_id].append(request_id)
+            
+            self._request_task[(conversation_id, request_id)] = task_id
+            # 存储对话对应的provider_id
+            self._conversation_provider[conversation_id] = provider_id
+            
+            # 如果提供了回调，存储它
+            if callback:
+                self._callbacks[(conversation_id, request_id)] = callback
+                
+            # 如果设置了超时，创建超时任务
+            if timeout:
+                self._create_timeout_task(conversation_id, request_id, timeout, provider, callback)
+                
+            # 如果是阻塞模式，等待结果
+            if blocking:
+                return await self._wait_for_result(conversation_id, request_id, provider, timeout)
+            else:
+                return request_id
+        except Exception as e:
+            # 处理请求过程中的异常
+            if callback:
+                try:
+                    await callback.on_humanloop_error(provider, e)
+                except:
+                    # 如果错误回调也失败，只能忽略
+                    pass
+            raise  # 重新抛出异常，让调用者知道发生了错误
     
     async def continue_humanloop(
         self,
@@ -148,51 +158,61 @@ class DefaultHumanLoopManager(HumanLoopManager):
             
         provider = self.providers[provider_id]
         
-        # 发送继续请求
-        result = await provider.continue_humanloop(
-            conversation_id=conversation_id,
-            context=context,
-            metadata=metadata,
-            timeout=timeout,
-        )
-        
-        request_id = result.request_id
+        try:
+            # 发送继续请求
+            result = await provider.continue_humanloop(
+                conversation_id=conversation_id,
+                context=context,
+                metadata=metadata,
+                timeout=timeout,
+            )
+            
+            request_id = result.request_id
 
-        if not request_id:
-            raise ValueError(f"Failed to continue humanloop for conversation '{conversation_id}'")
-        
-        # 更新conversation_id和request_id的关系
-        if conversation_id not in self._conversation_requests:
-            self._conversation_requests[conversation_id] = []
-        self._conversation_requests[conversation_id].append(request_id)
-        
-        # 查找此conversation_id对应的task_id
-        task_id = None
-        for t_id, convs in self._task_conversations.items():
-            if conversation_id in convs:
-                task_id = t_id
-                break
+            if not request_id:
+                raise ValueError(f"Failed to continue humanloop for conversation '{conversation_id}'")
+            
+            # 更新conversation_id和request_id的关系
+            if conversation_id not in self._conversation_requests:
+                self._conversation_requests[conversation_id] = []
+            self._conversation_requests[conversation_id].append(request_id)
+            
+            # 查找此conversation_id对应的task_id
+            task_id = None
+            for t_id, convs in self._task_conversations.items():
+                if conversation_id in convs:
+                    task_id = t_id
+                    break
+                    
+            if task_id:
+                self._request_task[(conversation_id, request_id)] = task_id
+            
+            # 存储对话对应的provider_id，如果对话不存在才存储
+            if conversation_id not in self._conversation_provider:
+                self._conversation_provider[conversation_id] = provider_id
+            
+            # 如果提供了回调，存储它
+            if callback:
+                self._callbacks[(conversation_id, request_id)] = callback
                 
-        if task_id:
-            self._request_task[(conversation_id, request_id)] = task_id
-        
-        # 存储对话对应的provider_id，如果对话不存在才存储
-        if conversation_id not in self._conversation_provider:
-            self._conversation_provider[conversation_id] = provider_id
-        
-        # 如果提供了回调，存储它
-        if callback:
-            self._callbacks[(conversation_id, request_id)] = callback
-            
-        # 如果设置了超时，创建超时任务
-        if timeout:
-            self._create_timeout_task(conversation_id, request_id, timeout, provider, callback)
-            
-        # 如果是阻塞模式，等待结果
-        if blocking:
-            return await self._wait_for_result(conversation_id, request_id, provider, timeout)
-        else:
-            return request_id
+            # 如果设置了超时，创建超时任务
+            if timeout:
+                self._create_timeout_task(conversation_id, request_id, timeout, provider, callback)
+                
+            # 如果是阻塞模式，等待结果
+            if blocking:
+                return await self._wait_for_result(conversation_id, request_id, provider, timeout)
+            else:
+                return request_id
+        except Exception as e:
+            # 处理继续请求过程中的异常
+            if callback:
+                try:
+                    await callback.on_humanloop_error(provider, e)
+                except:
+                    # 如果错误回调也失败，只能忽略
+                    pass
+            raise  # 重新抛出异常，让调用者知道发生了错误
             
     async def check_request_status(
         self,
@@ -210,13 +230,25 @@ class DefaultHumanLoopManager(HumanLoopManager):
             raise ValueError(f"Provider '{provider_id}' not found")
             
         provider = self.providers[provider_id]
-        result = await provider.check_request_status(conversation_id, request_id)
         
-        # 如果有回调且状态不是等待或进行中，触发状态更新回调
-        if (conversation_id, request_id) in self._callbacks and result.status not in [HumanLoopStatus.PENDING]:
-            await self._trigger_update_callback(conversation_id, request_id, provider, result)
+        try:
+            result = await provider.check_request_status(conversation_id, request_id)
             
-        return result
+            # 如果有回调且状态不是等待或进行中，触发状态更新回调
+            if (conversation_id, request_id) in self._callbacks and result.status not in [HumanLoopStatus.PENDING]:
+                await self._trigger_update_callback(conversation_id, request_id, provider, result)
+                
+            return result
+        except Exception as e:
+            # 处理检查状态过程中的异常
+            callback = self._callbacks.get((conversation_id, request_id))
+            if callback:
+                try:
+                    await callback.on_humanloop_error(provider, e)
+                except:
+                    # 如果错误回调也失败，只能忽略
+                    pass
+            raise  # 重新抛出异常，让调用者知道发生了错误
     
     async def check_conversation_status(
         self,
@@ -234,7 +266,23 @@ class DefaultHumanLoopManager(HumanLoopManager):
             
         #  检查对话指定provider_id或默认provider_id最后一次请求的状态
         provider = self.providers[provider_id]
-        return await provider.check_conversation_status(conversation_id)
+        
+        try:
+            #  检查对话指定provider_id或默认provider_id最后一次请求的状态
+            return await provider.check_conversation_status(conversation_id)
+        except Exception as e:
+            # 处理检查对话状态过程中的异常
+            # 尝试找到与此对话关联的最后一个请求的回调
+            if conversation_id in self._conversation_requests and self._conversation_requests[conversation_id]:
+                last_request_id = self._conversation_requests[conversation_id][-1]
+                callback = self._callbacks.get((conversation_id, last_request_id))
+                if callback:
+                    try:
+                        await callback.on_humanloop_error(provider, e)
+                    except:
+                        # 如果错误回调也失败，只能忽略
+                        pass
+            raise  # 重新抛出异常，让调用者知道发生了错误
     
     async def cancel_request(
         self,
@@ -407,10 +455,8 @@ class DefaultHumanLoopManager(HumanLoopManager):
         while True:
             result = await self.check_request_status(conversation_id, request_id, provider.name)
             
-            # 如果状态是最终状态（非PENDING），返回结果
+            #如果状态是最终状态（非PENDING），返回结果
             if result.status != HumanLoopStatus.PENDING:
-                if (conversation_id, request_id) in self._callbacks:
-                    await self._trigger_update_callback(conversation_id, request_id, provider,result)
                 return result
                 
             # 等待一段时间后再次轮询
