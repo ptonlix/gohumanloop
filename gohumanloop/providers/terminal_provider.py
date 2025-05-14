@@ -225,7 +225,6 @@ class TerminalProvider(BaseProvider):
         # Execute blocking input() call in thread pool using run_in_executor
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(None, input)
-
         # Process response
         response = response.strip().lower()
         if response in ["approve", "yes", "y", "同意", "批准"]:

@@ -732,13 +732,8 @@ def interrupt(value: Any, lg_humanloop: LangGraphAdapter = default_adapter) -> A
     
     # Get current event loop or create new one
     try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        # If no event loop exists, create a new one
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    
-    loop.create_task(lg_humanloop.manager.request_humanloop(
+        running_loop = asyncio.get_running_loop() # Check if running in async context
+        running_loop.create_task(lg_humanloop.manager.request_humanloop(
         task_id="lg_interrupt",
         conversation_id=default_conversation_id,
         loop_type=HumanLoopType.INFORMATION,
@@ -748,7 +743,21 @@ def interrupt(value: Any, lg_humanloop: LangGraphAdapter = default_adapter) -> A
         },
         blocking=False,
     ))
+    except RuntimeError:
+        # If no event loop exists, create a new one
+        loop = asyncio.get_event_loop() # In synchronous environment
     
+        run_async_safely(lg_humanloop.manager.request_humanloop(
+        task_id="lg_interrupt",
+        conversation_id=default_conversation_id,
+        loop_type=HumanLoopType.INFORMATION,
+        context={
+            "message": f"{value}",
+            "question": "The execution has been interrupted. Please review the above information and provide your input to continue.",
+        },
+        blocking=False,
+    ))
+
     # Return LangGraph's interrupt
     return _lg_interrupt(value)
 def create_resume_command(lg_humanloop: LangGraphAdapter = default_adapter) -> Any:
@@ -774,6 +783,7 @@ def create_resume_command(lg_humanloop: LangGraphAdapter = default_adapter) -> A
         poll_interval = 1.0  # Polling interval (seconds)
         while True:
             result = await lg_humanloop.manager.check_conversation_status(default_conversation_id)
+            print(result)
             # If status is final state (not PENDING), return result
             if result.status != HumanLoopStatus.PENDING:
                 return result.response
@@ -781,6 +791,8 @@ def create_resume_command(lg_humanloop: LangGraphAdapter = default_adapter) -> A
             await asyncio.sleep(poll_interval)
     
     # Wait for async result synchronously
+    # loop = asyncio.get_event_loop() # In synchronous environment
+
     response = run_async_safely(poll_for_result())
     return _lg_Command(resume=response)
 

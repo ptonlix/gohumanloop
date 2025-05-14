@@ -2,16 +2,43 @@ import asyncio
 import os
 from typing import Optional, Union
 from pydantic import SecretStr
+import warnings
+
 def run_async_safely(coro):
-    """同步环境下安全地运行异步协程，避免事件循环冲突"""
+    """
+    Safely run async coroutines in synchronous environment
+    Will raise RuntimeError if called in async environment
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:  # No running event loop
+        loop = None
+    
+    if loop is not None:
+        raise RuntimeError(
+            "Detected running event loop! "
+            "You should use 'await' directly instead of run_async_safely(). "
+            "If you really need to call sync code from async context, "
+            "consider using asyncio.to_thread() or other proper methods."
+        )
+    
+    # Handle synchronous environment
     try:
         loop = asyncio.get_event_loop()
+        print("Using existing event loop.")
     except RuntimeError:
-        # 如果没有事件循环，创建一个新的
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
+        own_loop = True
+        print("Created new event loop.")
+    else:
+        own_loop = False
     
-    return loop.run_until_complete(coro)
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        if own_loop and not loop.is_closed():
+            loop.close()
 
 
 def get_secret_from_env(

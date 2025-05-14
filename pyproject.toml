@@ -1,6 +1,9 @@
 [project]
+authors = [
+    {name = "gohumanloop authors", email = "baird0917@163.com"},
+]
 name = "gohumanloop"
-version = "0.0.1"
+version = "0.0.2"
 description = "Perfecting AI workflows with human intelligence"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -22,8 +25,13 @@ email = [
     "imapclient>=3.0.1",
 ]
 
-[tool.setuptools]
-packages = ["gohumanloop"]
+
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["gohumanloop", "gohumanloop.*"]
 
 [tool.pytest.ini_options]
 asyncio_default_fixture_loop_scope = "function"
