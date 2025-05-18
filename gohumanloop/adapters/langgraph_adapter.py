@@ -2,6 +2,7 @@ from typing import Dict, Any, Optional, Callable, Awaitable, TypeVar, Union, Lis
 from functools import wraps
 import asyncio
 import uuid
+import time
 from inspect import iscoroutinefunction
 from contextlib import asynccontextmanager, contextmanager
 
@@ -209,7 +210,7 @@ class LangGraphAdapter:
             else:
                 cb = callback
 
-            result = await self.manager.request_humanloop(
+            result = await self.manager.async_request_humanloop(
                 task_id=task_id,
                 conversation_id=conversation_id,
                 loop_type=HumanLoopType.APPROVAL,
@@ -374,12 +375,12 @@ class LangGraphAdapter:
             question_content = f"Please respond to the following information:\n{node_input}"
             
             # Check if conversation exists to determine whether to use request_humanloop or continue_humanloop
-            conversation_requests = await self.manager.check_conversation_exist(task_id, conversation_id)
+            conversation_requests = await self.manager.async_check_conversation_exist(task_id, conversation_id)
             
             result = None
             if conversation_requests:
                 # Existing conversation, use continue_humanloop
-                result = await self.manager.continue_humanloop(
+                result = await self.manager.async_continue_humanloop(
                     conversation_id=conversation_id,
                     context={
                         "message": {
@@ -400,7 +401,7 @@ class LangGraphAdapter:
                 )
             else:
                 # New conversation, use request_humanloop
-                result = await self.manager.request_humanloop(
+                result = await self.manager.async_request_humanloop(
                     task_id=task_id,
                     conversation_id=conversation_id,
                     loop_type=HumanLoopType.CONVERSATION,
@@ -543,7 +544,7 @@ class LangGraphAdapter:
             else:
                 cb = callback
                 
-            result = await self.manager.request_humanloop(
+            result = await self.manager.async_request_humanloop(
                 task_id=task_id,
                 conversation_id=conversation_id,
                 loop_type=HumanLoopType.INFORMATION,
@@ -608,37 +609,37 @@ class LangGraphHumanLoopCallback(HumanLoopCallback):
     def __init__(
         self,
         state: Any,
-        on_update: Optional[Callable[[Any, HumanLoopProvider, HumanLoopResult], Awaitable[None]]] = None,
-        on_timeout: Optional[Callable[[Any, HumanLoopProvider], Awaitable[None]]] = None,
-        on_error: Optional[Callable[[Any, HumanLoopProvider, Exception], Awaitable[None]]] = None
+        async_on_update: Optional[Callable[[Any, HumanLoopProvider, HumanLoopResult], Awaitable[None]]] = None,
+        async_on_timeout: Optional[Callable[[Any, HumanLoopProvider], Awaitable[None]]] = None,
+        async_on_error: Optional[Callable[[Any, HumanLoopProvider, Exception], Awaitable[None]]] = None,
     ):
         self.state = state
-        self.on_update = on_update
-        self.on_timeout = on_timeout
-        self.on_error = on_error
+        self.async_on_update = async_on_update
+        self.async_on_timeout = async_on_timeout
+        self.async_on_error = async_on_error
 
-    async def on_humanloop_update(
+    async def async_on_humanloop_update(
         self,
         provider: HumanLoopProvider,
         result: HumanLoopResult
     ):
-        if self.on_update:
-            await self.on_update(self.state, provider, result)
+        if self.async_on_update:
+            await self.async_on_update(self.state, provider, result)
 
-    async def on_humanloop_timeout(
+    async def async_on_humanloop_timeout(
         self,
         provider: HumanLoopProvider,
     ):
-        if self.on_timeout:
-            await self.on_timeout(self.state, provider)
+        if self.async_on_timeout:
+            await self.async_on_timeout(self.state, provider)
 
-    async def on_humanloop_error(
+    async def async_humanloop_on_error(
         self,
         provider: HumanLoopProvider,
         error: Exception
     ):
-        if self.on_error:
-            await self.on_error(self.state, provider, error)
+        if self.async_on_error:
+            await self.async_on_error(self.state, provider, error)
 
 
 def default_langgraph_callback_factory(state: Any) -> LangGraphHumanLoopCallback:
@@ -661,7 +662,7 @@ def default_langgraph_callback_factory(state: Any) -> LangGraphHumanLoopCallback
     
     logger = logging.getLogger("gohumanloop.langgraph")
     
-    async def on_update(state, provider: HumanLoopProvider, result: HumanLoopResult):
+    async def async_on_update(state, provider: HumanLoopProvider, result: HumanLoopResult):
         """Log human interaction update events"""
         logger.info(f"Provider ID: {provider.name}")
         logger.info(
@@ -673,8 +674,9 @@ def default_langgraph_callback_factory(state: Any) -> LangGraphHumanLoopCallback
             f"feedback={result.feedback}"
         )
         
+    
 
-    async def on_timeout(state, provider: HumanLoopProvider):
+    async def async_on_timeout(state, provider: HumanLoopProvider):
         """Log human interaction timeout events"""
         
         logger.info(f"Provider ID: {provider.name}")
@@ -685,7 +687,7 @@ def default_langgraph_callback_factory(state: Any) -> LangGraphHumanLoopCallback
         
         # Alert logic can be added here, such as sending notifications
 
-    async def on_error(state, provider: HumanLoopProvider, error: Exception):
+    async def async_on_error(state, provider: HumanLoopProvider, error: Exception):
         """Log human interaction error events"""
       
         logger.info(f"Provider ID: {provider.name}")
@@ -695,9 +697,9 @@ def default_langgraph_callback_factory(state: Any) -> LangGraphHumanLoopCallback
 
     return LangGraphHumanLoopCallback(
         state=state,
-        on_update=on_update,
-        on_timeout=on_timeout,
-        on_error=on_error
+        async_on_update=async_on_update,
+        async_on_timeout=async_on_timeout,
+        async_on_error=async_on_error
     )
 
 from gohumanloop.core.manager import DefaultHumanLoopManager
@@ -731,9 +733,7 @@ def interrupt(value: Any, lg_humanloop: LangGraphAdapter = default_adapter) -> A
         )
     
     # Get current event loop or create new one
-    try:
-        running_loop = asyncio.get_running_loop() # Check if running in async context
-        running_loop.create_task(lg_humanloop.manager.request_humanloop(
+    lg_humanloop.manager.request_humanloop(
         task_id="lg_interrupt",
         conversation_id=default_conversation_id,
         loop_type=HumanLoopType.INFORMATION,
@@ -742,21 +742,7 @@ def interrupt(value: Any, lg_humanloop: LangGraphAdapter = default_adapter) -> A
             "question": "The execution has been interrupted. Please review the above information and provide your input to continue.",
         },
         blocking=False,
-    ))
-    except RuntimeError:
-        # If no event loop exists, create a new one
-        loop = asyncio.get_event_loop() # In synchronous environment
-    
-        run_async_safely(lg_humanloop.manager.request_humanloop(
-        task_id="lg_interrupt",
-        conversation_id=default_conversation_id,
-        loop_type=HumanLoopType.INFORMATION,
-        context={
-            "message": f"{value}",
-            "question": "The execution has been interrupted. Please review the above information and provide your input to continue.",
-        },
-        blocking=False,
-    ))
+    )
 
     # Return LangGraph's interrupt
     return _lg_interrupt(value)
@@ -779,21 +765,21 @@ def create_resume_command(lg_humanloop: LangGraphAdapter = default_adapter) -> A
         )
 
     # Define async polling function
-    async def poll_for_result():
+    def poll_for_result():
         poll_interval = 1.0  # Polling interval (seconds)
         while True:
-            result = await lg_humanloop.manager.check_conversation_status(default_conversation_id)
+            result = lg_humanloop.manager.check_conversation_status(default_conversation_id)
             print(result)
             # If status is final state (not PENDING), return result
             if result.status != HumanLoopStatus.PENDING:
                 return result.response
             # Wait before polling again
-            await asyncio.sleep(poll_interval)
+            time.sleep(poll_interval)
     
     # Wait for async result synchronously
     # loop = asyncio.get_event_loop() # In synchronous environment
 
-    response = run_async_safely(poll_for_result())
+    response = poll_for_result()
     return _lg_Command(resume=response)
 
 async def acreate_resume_command(lg_humanloop: LangGraphAdapter = default_adapter) -> Any:
@@ -818,7 +804,7 @@ async def acreate_resume_command(lg_humanloop: LangGraphAdapter = default_adapte
     async def poll_for_result():
         poll_interval = 1.0  # Polling interval (seconds)
         while True:
-            result = await lg_humanloop.manager.check_conversation_status(default_conversation_id)
+            result = await lg_humanloop.manager.async_check_conversation_status(default_conversation_id)
             # If status is final state (not PENDING), return result
             if result.status != HumanLoopStatus.PENDING:
                 return result.response

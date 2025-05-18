@@ -36,7 +36,7 @@ async def approval_example(provider):
     }
     
     # 发起审批请求
-    result = await provider.request_humanloop(
+    result = await provider.async_request_humanloop(
         task_id="DB-CHANGE-001",
         conversation_id="approval-example-1",
         loop_type=HumanLoopType.APPROVAL,
@@ -54,7 +54,7 @@ async def approval_example(provider):
     # 等待并检查结果
     while True:
         await asyncio.sleep(10)  # 每10秒检查一次
-        status = await provider.check_request_status(
+        status = await provider.async_check_request_status(
             conversation_id=result.conversation_id,
             request_id=result.request_id
         )
@@ -92,7 +92,7 @@ async def information_example(provider):
     }
     
     # 发起信息请求
-    result = await provider.request_humanloop(
+    result = await provider.async_request_humanloop(
         task_id="INFO-REQ-002",
         conversation_id="info-example-1",
         loop_type=HumanLoopType.INFORMATION,
@@ -110,7 +110,7 @@ async def information_example(provider):
     # 等待并检查结果
     while True:
         await asyncio.sleep(10)  # 每10秒检查一次
-        status = await provider.check_request_status(
+        status = await provider.async_check_request_status(
             conversation_id=result.conversation_id,
             request_id=result.request_id
         )
@@ -144,7 +144,7 @@ async def conversation_example(provider):
     }
     
     # 发起对话
-    result = await provider.request_humanloop(
+    result = await provider.async_request_humanloop(
         task_id="CONV-003",
         conversation_id="conv-example-1",
         loop_type=HumanLoopType.CONVERSATION,
@@ -162,7 +162,7 @@ async def conversation_example(provider):
     first_response = None
     while True:
         await asyncio.sleep(10)  # 每10秒检查一次
-        status = await provider.check_request_status(
+        status = await provider.async_check_request_status(
             conversation_id=result.conversation_id,
             request_id=result.request_id
         )
@@ -200,7 +200,7 @@ async def conversation_example(provider):
         }
         
         # 继续对话
-        continue_result = await provider.continue_humanloop(
+        continue_result = await provider.async_continue_humanloop(
             conversation_id=result.conversation_id,
             context=follow_up_context,
             metadata={
@@ -213,7 +213,7 @@ async def conversation_example(provider):
         # 等待第二轮回复
         while True:
             await asyncio.sleep(10)
-            status = await provider.check_request_status(
+            status = await provider.async_check_request_status(
                 conversation_id=continue_result.conversation_id,
                 request_id=continue_result.request_id
             )
@@ -235,7 +235,7 @@ async def conversation_example(provider):
                         }
                         
                         # 继续对话
-                        continue_result = await provider.continue_humanloop(
+                        continue_result = await provider.async_continue_humanloop(
                             conversation_id=result.conversation_id,
                             context=follow_up_context,
                             metadata={

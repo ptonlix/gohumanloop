@@ -65,7 +65,7 @@ class APIProvider(BaseProvider):
             api_info += f"  Default Platform: {self.default_platform}\n"
         return f"{api_info}{base_str}"
         
-    async def _make_api_request(
+    async def _async_make_api_request(
         self, 
         endpoint: str, 
         method: str = "POST", 
@@ -146,7 +146,7 @@ class APIProvider(BaseProvider):
                     continue
                 raise
                 
-    async def request_humanloop(
+    async def async_request_humanloop(
         self,
         task_id: str,
         conversation_id: str,
@@ -208,7 +208,7 @@ class APIProvider(BaseProvider):
         
         try:
             # Send API request
-            response = await self._make_api_request(
+            response = await self._async_make_api_request(
                 endpoint="v1/humanloop/request",
                 method="POST",
                 data=request_data
@@ -231,13 +231,13 @@ class APIProvider(BaseProvider):
                 
             # Create polling task
             poll_task = asyncio.create_task(
-                self._poll_request_status(conversation_id, request_id, platform)
+                self._async_poll_request_status(conversation_id, request_id, platform)
             )
             self._poll_tasks[(conversation_id, request_id)] = poll_task
             
             # Create timeout task if timeout is set
             if timeout:
-                self._create_timeout_task(conversation_id, request_id, timeout)
+               await self._async_create_timeout_task(conversation_id, request_id, timeout)
                 
             return HumanLoopResult(
                 conversation_id=conversation_id,
@@ -258,7 +258,7 @@ class APIProvider(BaseProvider):
                 status=HumanLoopStatus.ERROR,
                 error=str(e)
             )
-    async def check_request_status(
+    async def async_check_request_status(
         self,
         conversation_id: str,
         request_id: str
@@ -297,7 +297,7 @@ class APIProvider(BaseProvider):
         return result
 
             
-    async def cancel_request(
+    async def async_cancel_request(
         self,
         conversation_id: str,
         request_id: str
@@ -312,7 +312,7 @@ class APIProvider(BaseProvider):
             bool: Whether cancellation was successful, True for success, False for failure
         """
         # First call parent method to update local state
-        result = await super().cancel_request(conversation_id, request_id)
+        result = await super().async_cancel_request(conversation_id, request_id)
         if not result:
             return False
             
@@ -335,7 +335,7 @@ class APIProvider(BaseProvider):
                 platform=platform
             ).model_dump()
             
-            response = await self._make_api_request(
+            response = await self._async_make_api_request(
                 endpoint="v1/humanloop/cancel",
                 method="POST",
                 data=cancel_data
@@ -359,7 +359,7 @@ class APIProvider(BaseProvider):
             logger.error(f"Cancel request failed: {str(e)}")
             return False
             
-    async def cancel_conversation(
+    async def async_cancel_conversation(
         self,
         conversation_id: str
     ) -> bool:
@@ -372,7 +372,7 @@ class APIProvider(BaseProvider):
             bool: Whether cancellation was successful
         """
         # First call parent method to update local state
-        result = await super().cancel_conversation(conversation_id)
+        result = await super().async_cancel_conversation(conversation_id)
         if not result:
             return False
             
@@ -398,7 +398,7 @@ class APIProvider(BaseProvider):
                 platform=platform
             ).model_dump()
             
-            response = await self._make_api_request(
+            response = await self._async_make_api_request(
                 endpoint="v1/humanloop/cancel_conversation",
                 method="POST",
                 data=cancel_data
@@ -424,7 +424,7 @@ class APIProvider(BaseProvider):
             return False
 
 
-    async def continue_humanloop(
+    async def async_continue_humanloop(
         self,
         conversation_id: str,
         context: Dict[str, Any],
@@ -496,7 +496,7 @@ class APIProvider(BaseProvider):
         
         try:
             # Send API request
-            response = await self._make_api_request(
+            response = await self._async_make_api_request(
                 endpoint="v1/humanloop/continue",
                 method="POST",
                 data=continue_data
@@ -518,13 +518,13 @@ class APIProvider(BaseProvider):
                 
             # Create polling task
             poll_task = asyncio.create_task(
-                self._poll_request_status(conversation_id, request_id, platform)
+                self._async_poll_request_status(conversation_id, request_id, platform)
             )
             self._poll_tasks[(conversation_id, request_id)] = poll_task
             
             # Create timeout task if timeout is set
             if timeout:
-                self._create_timeout_task(conversation_id, request_id, timeout)
+                await self._async_create_timeout_task(conversation_id, request_id, timeout)
                 
             return HumanLoopResult(
                 conversation_id=conversation_id,
@@ -546,7 +546,7 @@ class APIProvider(BaseProvider):
                 error=str(e)
             )
             
-    async def _poll_request_status(
+    async def _async_poll_request_status(
         self,
         conversation_id: str,
         request_id: str,
@@ -579,7 +579,7 @@ class APIProvider(BaseProvider):
                     platform=platform
                 ).model_dump()
                 
-                response = await self._make_api_request(
+                response = await self._async_make_api_request(
                     endpoint="v1/humanloop/status",
                     method="GET",
                     params=params

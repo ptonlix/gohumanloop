@@ -98,22 +98,22 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
         if auto_start_sync:
             # 判断是否处在异步环境
             if asyncio.get_event_loop().is_running():
-                asyncio.create_task(self.astart_sync_task())
+                asyncio.create_task(self.async_start_sync_task())
             else:
                 self.start_sync_task()
 
         
-    async def get_ghl_provider(self) -> GoHumanLoopProvider:
+    async def async_get_ghl_provider(self) -> GoHumanLoopProvider:
         """
         获取 GoHumanLoop 提供者实例
         
         Returns:
             GoHumanLoopProvider: GoHumanLoop 提供者实例
         """
-        provider = await self.get_provider(self.default_provider_id)
+        provider = await self.async_get_provider(self.default_provider_id)
         return provider
     
-    async def astart_sync_task(self):
+    async def async_start_sync_task(self):
         """启动数据同步任务"""
         if self._sync_task is None or self._sync_task.done():
             self._sync_task = asyncio.create_task(self._async_data_periodically())
@@ -176,7 +176,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
         # 对每个任务进行数据同步
         for task_id in task_ids:
             # 获取任务相关的所有对话
-            conversations = await self.aget_task_conversations(task_id)
+            conversations = await self.async_get_task_conversations(task_id)
             
             # 收集任务数据
             task_data = {
@@ -188,7 +188,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
             # 收集每个对话的数据
             for conversation_id in conversations:
                 # 获取对话中的所有请求
-                request_ids = await self.aget_conversation_requests(conversation_id)
+                request_ids = await self.async_get_conversation_requests(conversation_id)
                 
                 conversation_data = {
                     "conversation_id": conversation_id,
@@ -198,7 +198,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
                 
                 # 收集每个请求的数据
                 for request_id in request_ids:
-                    result = await self._aget_request_status(conversation_id, request_id)
+                    result = await self._async_get_request_status(conversation_id, request_id)
                     
                     # 添加请求数据
                     conversation_data["requests"].append({
@@ -227,7 +227,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
                     
                     # 添加此对话中的已取消请求
                     for request_id in cancel_info.get("request_ids", []):
-                        result = await self._aget_request_status(conv_id, request_id, cancel_info.get("provider_id"))
+                        result = await self._async_get_request_status(conv_id, request_id, cancel_info.get("provider_id"))
                     
                         # 添加请求数据
                         cancelled_conv_data["requests"].append({
@@ -245,7 +245,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
                     task_data["conversations"].append(cancelled_conv_data)
             
             # 发送数据到平台
-            await self._asend_task_data_to_platform(task_data)
+            await self._async_send_task_data_to_platform(task_data)
         
         # 更新最后同步时间
         self._last_sync_time = current_time
@@ -288,7 +288,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
                 
                 # 收集每个请求的数据
                 for request_id in request_ids:
-                    result = loop.run_until_complete(self._aget_request_status(conversation_id, request_id))
+                    result = loop.run_until_complete(self._async_get_request_status(conversation_id, request_id))
                     
                     # 添加请求数据
                     conversation_data["requests"].append({
@@ -318,7 +318,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
                     # 添加此对话中的已取消请求
                     for request_id in cancel_info.get("request_ids", []):
                         result = loop.run_until_complete(
-                            self._aget_request_status(conv_id, request_id, cancel_info.get("provider_id"))
+                            self._async_get_request_status(conv_id, request_id, cancel_info.get("provider_id"))
                         )
                     
                         # 添加请求数据
@@ -337,13 +337,13 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
                     task_data["conversations"].append(cancelled_conv_data)
             
             # 发送数据到平台
-            loop.run_until_complete(self._asend_task_data_to_platform(task_data))
+            loop.run_until_complete(self._async_send_task_data_to_platform(task_data))
             loop.close()
         
         # 更新最后同步时间
         self._last_sync_time = current_time
     
-    async def _asend_task_data_to_platform(self, task_data: Dict[str, Any]):
+    async def _async_send_task_data_to_platform(self, task_data: Dict[str, Any]):
         """发送任务数据到 GoHumanLoop 平台"""
         try:
             # 构建 API 请求 URL
@@ -390,7 +390,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
             print(f"发送任务数据到平台异常: {str(e)}")
 
     
-    async def cancel_conversation(
+    async def async_cancel_conversation(
         self,
         conversation_id: str,
         provider_id: Optional[str] = None
@@ -411,13 +411,13 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
         }
         
         # 调用父类方法执行实际取消操作
-        return await super().cancel_conversation(conversation_id, provider_id)
+        return await super().async_cancel_conversation(conversation_id, provider_id)
     
     def __str__(self) -> str:
         """返回此实例的字符串描述"""
         return f"GoHumanLoop(default_provider={self.default_provider_id}, providers={len(self.providers)})"
     
-    async def _aget_request_status(
+    async def _async_get_request_status(
         self,
         conversation_id: str,
         request_id: str,
@@ -444,7 +444,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
         provider = self.providers[provider_id]
         return await provider.check_request_status(conversation_id, request_id)
 
-    async def check_request_status(
+    async def async_check_request_status(
         self,
         conversation_id: str,
         request_id: str,
@@ -462,7 +462,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
             raise ValueError(f"Provider '{provider_id}' not found")
             
         provider = self.providers[provider_id]
-        result = await provider.check_request_status(conversation_id, request_id)
+        result = await provider.async_check_request_status(conversation_id, request_id)
         
         # 如果有回调且状态不是等待或进行中
         if result.status not in [HumanLoopStatus.PENDING]:
@@ -470,7 +470,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
             await self.async_data_to_platform()
             # 触发状态更新回调
             if (conversation_id, request_id) in self._callbacks:
-                await self._trigger_update_callback(conversation_id, request_id, provider, result)
+                await self._async_trigger_update_callback(conversation_id, request_id, provider, result)
 
         return result
     
@@ -492,7 +492,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
         except Exception as e:
             print(f"最终同步数据同步失败: {str(e)}")
 
-    async def ashutdown(self):
+    async def async_shutdown(self):
         """
         关闭管理器并确保数据同步（异步版本）
         
@@ -514,12 +514,12 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
     
     async def __aenter__(self):
         """实现异步上下文管理器协议的进入方法"""
-        await self.astart_sync_task()
+        await self.async_start_sync_task()
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """实现异步上下文管理器协议的退出方法"""
-        await self.ashutdown()
+        await self.async_shutdown()
     
     def __enter__(self):
         """实现同步上下文管理器协议的进入方法"""

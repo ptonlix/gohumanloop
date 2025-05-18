@@ -65,7 +65,7 @@ class HumanLoopProvider(Protocol):
     name: str  # 提供者名称
 
     @abstractmethod
-    async def request_humanloop(
+    async def async_request_humanloop(
         self,
         task_id: str,
         conversation_id: str,
@@ -88,9 +88,34 @@ class HumanLoopProvider(Protocol):
             HumanLoopResult: 包含请求ID和初始状态的结果对象
         """
         pass
+        
+    @abstractmethod
+    def request_humanloop(
+        self,
+        task_id: str,
+        conversation_id: str,
+        loop_type: HumanLoopType,
+        context: Dict[str, Any],
+        metadata: Optional[Dict[str, Any]] = None,
+        timeout: Optional[int] = None
+    ) -> HumanLoopResult:
+        """请求人机循环（同步版本）
+        
+        Args:
+            task_id: 任务标识符
+            conversation_id: 对话ID，用于多轮对话
+            loop_type: 循环类型
+            context: 提供给人类的上下文信息
+            metadata: 附加元数据
+            timeout: 请求超时时间（秒）
+            
+        Returns:
+            HumanLoopResult: 包含请求ID和初始状态的结果对象
+        """
+        pass
 
     @abstractmethod
-    async def check_request_status(
+    async def async_check_request_status(
         self,
         conversation_id: str,
         request_id: str
@@ -105,8 +130,26 @@ class HumanLoopProvider(Protocol):
             HumanLoopResult: 包含当前请求状态的结果对象，包括状态、响应数据等信息
         """
         pass
+        
     @abstractmethod
-    async def check_conversation_status(
+    def check_request_status(
+        self,
+        conversation_id: str,
+        request_id: str
+    ) -> HumanLoopResult:
+        """检查请求状态（同步版本）
+        
+        Args:
+            conversation_id: 对话标识符，用于关联多轮对话
+            request_id: 请求标识符，用于标识具体的交互请求
+            
+        Returns:
+            HumanLoopResult: 包含当前请求状态的结果对象，包括状态、响应数据等信息
+        """
+        pass
+        
+    @abstractmethod
+    async def async_check_conversation_status(
         self,
         conversation_id: str
     ) -> HumanLoopResult:
@@ -121,7 +164,22 @@ class HumanLoopProvider(Protocol):
         pass
         
     @abstractmethod
-    async def cancel_request(
+    def check_conversation_status(
+        self,
+        conversation_id: str
+    ) -> HumanLoopResult:
+        """检查对话状态（同步版本）
+        
+        Args:
+            conversation_id: 对话标识符
+            
+        Returns:
+            HumanLoopResult: 包含对话最新请求的状态
+        """
+        pass
+        
+    @abstractmethod
+    async def async_cancel_request(
         self,
         conversation_id: str,
         request_id: str
@@ -136,9 +194,26 @@ class HumanLoopProvider(Protocol):
             bool: 取消是否成功，True表示取消成功，False表示取消失败
         """
         pass
+        
+    @abstractmethod
+    def cancel_request(
+        self,
+        conversation_id: str,
+        request_id: str
+    ) -> bool:
+        """取消人机循环请求（同步版本）
+        
+        Args:
+            conversation_id: 对话标识符，用于关联多轮对话
+            request_id: 请求标识符，用于标识具体的交互请求
+            
+        Returns:
+            bool: 取消是否成功，True表示取消成功，False表示取消失败
+        """
+        pass
     
     @abstractmethod
-    async def cancel_conversation(
+    async def async_cancel_conversation(
         self,
         conversation_id: str
     ) -> bool:
@@ -151,9 +226,24 @@ class HumanLoopProvider(Protocol):
             bool: 取消是否成功
         """
         pass
+        
+    @abstractmethod
+    def cancel_conversation(
+        self,
+        conversation_id: str
+    ) -> bool:
+        """取消整个对话（同步版本）
+        
+        Args:
+            conversation_id: 对话标识符
+            
+        Returns:
+            bool: 取消是否成功
+        """
+        pass
     
     @abstractmethod
-    async def continue_humanloop(
+    async def async_continue_humanloop(
         self,
         conversation_id: str,
         context: Dict[str, Any],
@@ -172,12 +262,33 @@ class HumanLoopProvider(Protocol):
             HumanLoopResult: 包含请求ID和状态的结果对象
         """
         pass
+        
+    @abstractmethod
+    def continue_humanloop(
+        self,
+        conversation_id: str,
+        context: Dict[str, Any],
+        metadata: Optional[Dict[str, Any]] = None,
+        timeout: Optional[int] = None,
+    ) -> HumanLoopResult:
+        """继续人机循环（同步版本）
+        
+        Args:
+            conversation_id: 对话ID，用于多轮对话
+            context: 提供给人类的上下文信息
+            metadata: 附加元数据
+            timeout: 请求超时时间（秒）
+            
+        Returns:
+            HumanLoopResult: 包含请求ID和状态的结果对象
+        """
+        pass
 
 class HumanLoopCallback(ABC):
     """人机循环回调的抽象类"""
     
     @abstractmethod
-    async def on_humanloop_update(
+    async def async_on_humanloop_update(
         self,
         provider: HumanLoopProvider,
         result: HumanLoopResult
@@ -190,8 +301,9 @@ class HumanLoopCallback(ABC):
         """
         pass
         
+        
     @abstractmethod
-    async def on_humanloop_timeout(
+    async def async_on_humanloop_timeout(
         self,
         provider: HumanLoopProvider,
     ):
@@ -201,9 +313,10 @@ class HumanLoopCallback(ABC):
             provider: 人机循环提供者实例
         """
         pass
+    
         
     @abstractmethod
-    async def on_humanloop_error(
+    async def async_on_humanloop_error(
         self,
         provider: HumanLoopProvider,
         error: Exception
@@ -215,12 +328,13 @@ class HumanLoopCallback(ABC):
             error: 错误信息
         """
         pass
+        
 
 class HumanLoopManager(ABC):
     """人机循环管理器的抽象类"""
     
     @abstractmethod
-    async def register_provider(
+    async def async_register_provider(
         self,
         provider: HumanLoopProvider,
         provider_id: Optional[str] = None
@@ -237,7 +351,24 @@ class HumanLoopManager(ABC):
         pass
         
     @abstractmethod
-    async def request_humanloop(
+    def register_provider(
+        self,
+        provider: HumanLoopProvider,
+        provider_id: Optional[str] = None
+    ) -> str:
+        """注册人机循环提供者（同步版本）
+        
+        Args:
+            provider: 人机循环提供者实例
+            provider_id: 提供者标识符（可选）
+            
+        Returns:
+            str: 注册成功后的提供者ID
+        """
+        pass
+        
+    @abstractmethod
+    async def async_request_humanloop(
         self,
         task_id: str,
         conversation_id: str,
@@ -266,9 +397,40 @@ class HumanLoopManager(ABC):
             Union[str, HumanLoopResult]: 如果blocking=False，返回请求ID；否则返回循环结果
         """
         pass
+        
+    @abstractmethod
+    def request_humanloop(
+        self,
+        task_id: str,
+        conversation_id: str,
+        loop_type: HumanLoopType,
+        context: Dict[str, Any],
+        callback: Optional[HumanLoopCallback] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        provider_id: Optional[str] = None,
+        timeout: Optional[int] = None,
+        blocking: bool = False,
+    ) -> Union[str, HumanLoopResult]:
+        """请求人机循环（同步版本）
+        
+        Args:
+            task_id: 任务标识符
+            conversation_id: 对话ID，用于多轮对话
+            loop_type: 循环类型
+            context: 提供给人类的上下文信息
+            callback: 回调对象（可选）
+            metadata: 附加元数据
+            provider_id: 使用特定提供者的ID（可选）
+            timeout: 请求超时时间（秒）
+            blocking: 是否阻塞等待结果
+            
+        Returns:
+            Union[str, HumanLoopResult]: 如果blocking=False，返回请求ID；否则返回循环结果
+        """
+        pass
     
     @abstractmethod
-    async def continue_humanloop(
+    async def async_continue_humanloop(
         self,
         conversation_id: str,
         context: Dict[str, Any],
@@ -293,9 +455,36 @@ class HumanLoopManager(ABC):
             Union[str, HumanLoopResult]: 如果blocking=False，返回请求ID；否则返回循环结果
         """
         pass
+        
+    @abstractmethod
+    def continue_humanloop(
+        self,
+        conversation_id: str,
+        context: Dict[str, Any],
+        callback: Optional[HumanLoopCallback] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        provider_id: Optional[str] = None,
+        timeout: Optional[int] = None,
+        blocking: bool = False,
+    ) -> Union[str, HumanLoopResult]:
+        """继续人机循环（同步版本）
+        
+        Args:
+            conversation_id: 对话ID，用于多轮对话
+            context: 提供给人类的上下文信息
+            callback: 回调对象（可选）
+            metadata: 附加元数据
+            provider_id: 使用特定提供者的ID（可选）
+            timeout: 请求超时时间（秒）
+            blocking: 是否阻塞等待结果
+            
+        Returns:
+            Union[str, HumanLoopResult]: 如果blocking=False，返回请求ID；否则返回循环结果
+        """
+        pass
     
     @abstractmethod
-    async def check_request_status(
+    async def async_check_request_status(
         self,
         conversation_id: str,
         request_id: str,
@@ -312,9 +501,28 @@ class HumanLoopManager(ABC):
             HumanLoopResult: 包含当前请求状态的结果对象
         """
         pass
+        
+    @abstractmethod
+    def check_request_status(
+        self,
+        conversation_id: str,
+        request_id: str,
+        provider_id: Optional[str] = None
+    ) -> HumanLoopResult:
+        """检查请求状态（同步版本）
+        
+        Args:
+            conversation_id: 对话标识符
+            request_id: 请求标识符
+            provider_id: 使用特定提供者的ID（可选）
+            
+        Returns:
+            HumanLoopResult: 包含当前请求状态的结果对象
+        """
+        pass
     
     @abstractmethod
-    async def check_conversation_status(
+    async def async_check_conversation_status(
         self,
         conversation_id: str,
         provider_id: Optional[str] = None
@@ -329,9 +537,26 @@ class HumanLoopManager(ABC):
             HumanLoopResult: 包含对话最新请求的状态
         """
         pass
+        
+    @abstractmethod
+    def check_conversation_status(
+        self,
+        conversation_id: str,
+        provider_id: Optional[str] = None
+    ) -> HumanLoopResult:
+        """检查对话状态（同步版本）
+        
+        Args:
+            conversation_id: 对话标识符
+            provider_id: 使用特定提供者的ID（可选）
+            
+        Returns:
+            HumanLoopResult: 包含对话最新请求的状态
+        """
+        pass
     
     @abstractmethod
-    async def cancel_request(
+    async def async_cancel_request(
         self,
         conversation_id: str,
         request_id: str,
@@ -348,9 +573,28 @@ class HumanLoopManager(ABC):
             bool: 取消是否成功
         """
         pass
+        
+    @abstractmethod
+    def cancel_request(
+        self,
+        conversation_id: str,
+        request_id: str,
+        provider_id: Optional[str] = None
+    ) -> bool:
+        """取消特定请求（同步版本）
+        
+        Args:
+            conversation_id: 对话标识符
+            request_id: 请求标识符
+            provider_id: 使用特定提供者的ID（可选）
+            
+        Returns:
+            bool: 取消是否成功
+        """
+        pass
     
     @abstractmethod
-    async def cancel_conversation(
+    async def async_cancel_conversation(
         self,
         conversation_id: str,
         provider_id: Optional[str] = None
@@ -365,9 +609,26 @@ class HumanLoopManager(ABC):
             bool: 取消是否成功
         """
         pass
+        
+    @abstractmethod
+    def cancel_conversation(
+        self,
+        conversation_id: str,
+        provider_id: Optional[str] = None
+    ) -> bool:
+        """取消整个对话（同步版本）
+        
+        Args:
+            conversation_id: 对话标识符
+            provider_id: 使用特定提供者的ID（可选）
+            
+        Returns:
+            bool: 取消是否成功
+        """
+        pass
     
     @abstractmethod
-    async def get_provider(
+    async def async_get_provider(
         self,
         provider_id: Optional[str] = None
     ) -> HumanLoopProvider:
@@ -383,10 +644,37 @@ class HumanLoopManager(ABC):
             ValueError: 如果指定的提供者不存在
         """
         pass
+        
+    @abstractmethod
+    def get_provider(
+        self,
+        provider_id: Optional[str] = None
+    ) -> HumanLoopProvider:
+        """获取指定的提供者实例（同步版本）
+        
+        Args:
+            provider_id: 提供者ID，如果为None则返回默认提供者
+            
+        Returns:
+            HumanLoopProvider: 提供者实例
+            
+        Raises:
+            ValueError: 如果指定的提供者不存在
+        """
+        pass
     
     @abstractmethod
-    async def list_providers(self) -> Dict[str, HumanLoopProvider]:
+    async def async_list_providers(self) -> Dict[str, HumanLoopProvider]:
         """列出所有注册的提供者
+        
+        Returns:
+            Dict[str, HumanLoopProvider]: 提供者ID到提供者实例的映射
+        """
+        pass
+        
+    @abstractmethod
+    def list_providers(self) -> Dict[str, HumanLoopProvider]:
+        """列出所有注册的提供者（同步版本）
         
         Returns:
             Dict[str, HumanLoopProvider]: 提供者ID到提供者实例的映射
@@ -394,7 +682,7 @@ class HumanLoopManager(ABC):
         pass
     
     @abstractmethod
-    async def set_default_provider(
+    async def async_set_default_provider(
         self,
         provider_id: str
     ) -> bool:
@@ -410,9 +698,27 @@ class HumanLoopManager(ABC):
             ValueError: 如果指定的提供者不存在
         """
         pass
+        
+    @abstractmethod
+    def set_default_provider(
+        self,
+        provider_id: str
+    ) -> bool:
+        """设置默认提供者（同步版本）
+        
+        Args:
+            provider_id: 提供者ID
+            
+        Returns:
+            bool: 设置是否成功
+            
+        Raises:
+            ValueError: 如果指定的提供者不存在
+        """
+        pass
 
     @abstractmethod
-    async def check_conversation_exist(
+    async def async_check_conversation_exist(
         self,
         task_id: str,
         conversation_id: str,
@@ -425,9 +731,24 @@ class HumanLoopManager(ABC):
             HumanLoopResult: 包含对话最新请求的状态
         """
         pass
+        
+    @abstractmethod
+    def check_conversation_exist(
+        self,
+        task_id: str,
+        conversation_id: str,
+    ) -> HumanLoopResult:
+        """检查对话状态（同步版本）
+        
+        Args:
+            conversation_id: 对话标识符
+        Returns:
+            HumanLoopResult: 包含对话最新请求的状态
+        """
+        pass
 
     @abstractmethod
-    async def ashutdown(self):
+    async def async_shutdown(self):
         """关闭管理器(异步方法)"""
         pass
 

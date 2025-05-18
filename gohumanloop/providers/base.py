@@ -109,7 +109,7 @@ class BaseProvider(HumanLoopProvider, ABC):
         """Get all request IDs in the conversation"""
         return self._conversation_requests.get(conversation_id, [])
         
-    async def request_humanloop(
+    async def async_request_humanloop(
         self,
         task_id: str,
         conversation_id: str,
@@ -134,8 +134,52 @@ class BaseProvider(HumanLoopProvider, ABC):
         # Subclasses must implement this method
         raise NotImplementedError("Subclasses must implement request_humanloop")
         
+    def request_humanloop(
+        self,
+        task_id: str,
+        conversation_id: str,
+        loop_type: HumanLoopType,
+        context: Dict[str, Any],
+        metadata: Optional[Dict[str, Any]] = None,
+        timeout: Optional[int] = None
+    ) -> HumanLoopResult:
+        """Request human-in-the-loop interaction (synchronous version)
         
-    async def check_request_status(
+        Args:
+            task_id: Task identifier
+            conversation_id: Conversation ID for multi-turn dialogues
+            loop_type: Type of human loop interaction
+            context: Context information provided to human
+            metadata: Additional metadata
+            timeout: Request timeout in seconds
+            
+        Returns:
+            HumanLoopResult: Result object containing request ID and initial status
+        """
+
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # 如果事件循环已经在运行，创建一个新的事件循环
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            loop = new_loop
+            
+        try:
+            return loop.run_until_complete(
+                self.async_request_humanloop(
+                    task_id=task_id,
+                    conversation_id=conversation_id,
+                    loop_type=loop_type,
+                    context=context,
+                    metadata=metadata,
+                    timeout=timeout
+                    ))
+        finally:
+            if loop != asyncio.get_event_loop():
+                loop.close()
+
+
+    async def async_check_request_status(
         self,
         conversation_id: str,
         request_id: str
@@ -163,7 +207,39 @@ class BaseProvider(HumanLoopProvider, ABC):
         raise NotImplementedError("Subclasses must implement check_request_status")
 
 
-    async def check_conversation_status(
+    def check_request_status(
+        self,
+        conversation_id: str,
+        request_id: str
+    ) -> HumanLoopResult:
+        """Check conversation status (synchronous version)
+        
+        Args:
+            conversation_id: Conversation identifier
+            
+        Returns:
+            HumanLoopResult: Result containing the status of the latest request in the conversation
+        """
+        
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # 如果事件循环已经在运行，创建一个新的事件循环
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            loop = new_loop
+            
+        try:
+            return loop.run_until_complete(
+                self.async_check_request_status(
+                    conversation_id=conversation_id,
+                    request_id=request_id
+                ))
+        finally:
+            if loop != asyncio.get_event_loop():
+                loop.close()
+
+
+    async def async_check_conversation_status(
         self,
         conversation_id: str
     ) -> HumanLoopResult:
@@ -195,9 +271,40 @@ class BaseProvider(HumanLoopProvider, ABC):
                 error=f"No requests found in conversation '{conversation_id}'"
             )
             
-        return await self.check_request_status(conversation_id, latest_request_id)
+        return await self.async_check_request_status(conversation_id, latest_request_id)
+    
+    
+    def check_conversation_status(
+        self,
+        conversation_id: str
+    ) -> HumanLoopResult:
+        """Check conversation status (synchronous version)
         
-    async def cancel_request(
+        Args:
+            conversation_id: Conversation identifier
+            
+        Returns:
+            HumanLoopResult: Result containing the status of the latest request in the conversation
+        """
+
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # 如果事件循环已经在运行，创建一个新的事件循环
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            loop = new_loop
+            
+        try:
+            return loop.run_until_complete(
+               self.async_check_conversation_status(
+                    conversation_id=conversation_id
+                ))
+        finally:
+            if loop != asyncio.get_event_loop():
+                loop.close()
+    
+
+    async def async_cancel_request(
         self,
         conversation_id: str,
         request_id: str
@@ -224,7 +331,38 @@ class BaseProvider(HumanLoopProvider, ABC):
             return True
         return False
     
-    async def cancel_conversation(
+    def cancel_request(
+        self,
+        conversation_id: str,
+        request_id: str
+    ) -> bool:
+        """Cancel human-in-the-loop request (synchronous version)
+        
+        Args:
+            conversation_id: Conversation identifier for multi-turn dialogues
+            request_id: Request identifier for specific interaction request
+            
+        Returns:
+            bool: Whether cancellation was successful, True indicates success, False indicates failure
+        """
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # 如果事件循环已经在运行，创建一个新的事件循环
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            loop = new_loop
+            
+        try:
+            return loop.run_until_complete(
+               self.async_cancel_request(
+                    conversation_id=conversation_id,
+                    request_id=request_id
+                ))
+        finally:
+            if loop != asyncio.get_event_loop():
+                loop.close()
+
+    async def async_cancel_conversation(
         self,
         conversation_id: str
     ) -> bool:
@@ -258,7 +396,38 @@ class BaseProvider(HumanLoopProvider, ABC):
                 
         return success
         
-    async def continue_humanloop(
+
+    def cancel_conversation(
+        self,
+        conversation_id: str
+    ) -> bool:
+        """Cancel the entire conversation (synchronous version)
+        
+        Args:
+            conversation_id: Conversation identifier
+            
+        Returns:
+            bool: Whether the cancellation was successful
+        """
+        
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # 如果事件循环已经在运行，创建一个新的事件循环
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            loop = new_loop
+            
+        try:
+            return loop.run_until_complete(
+               self.async_cancel_conversation(
+                    conversation_id=conversation_id
+                ))
+        finally:
+            if loop != asyncio.get_event_loop():
+                loop.close()
+
+
+    async def async_continue_humanloop(
         self,
         conversation_id: str,
         context: Dict[str, Any],
@@ -290,7 +459,46 @@ class BaseProvider(HumanLoopProvider, ABC):
         # Subclasses need to implement specific continuation logic
         raise NotImplementedError("Subclasses must implement continue_humanloop")
         
-    def get_conversation_history(self, conversation_id: str) -> List[Dict[str, Any]]:
+
+    def continue_humanloop(
+        self,
+        conversation_id: str,
+        context: Dict[str, Any],
+        metadata: Optional[Dict[str, Any]] = None,
+        timeout: Optional[int] = None,
+    ) -> HumanLoopResult:
+        """Continue human-in-the-loop interaction (synchronous version)
+        
+        Args:
+            conversation_id: Conversation ID for multi-turn dialogues
+            context: Context information provided to human
+            metadata: Additional metadata
+            timeout: Request timeout in seconds
+            
+        Returns:
+            HumanLoopResult: Result object containing request ID and status
+        """
+
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # 如果事件循环已经在运行，创建一个新的事件循环
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            loop = new_loop
+            
+        try:
+            return loop.run_until_complete(
+               self.async_continue_humanloop(
+                    conversation_id=conversation_id,
+                    context=context,
+                    metadata=metadata,
+                    timeout=timeout
+                    ))
+        finally:
+            if loop != asyncio.get_event_loop():
+                loop.close()
+
+    def async_get_conversation_history(self, conversation_id: str) -> List[Dict[str, Any]]:
         """Get complete history for the specified conversation
         
         Args:
@@ -315,8 +523,30 @@ class BaseProvider(HumanLoopProvider, ABC):
                 })
         return conversation_history
 
+    def get_conversation_history(self, conversation_id: str) -> List[Dict[str, Any]]:
+        """Get complete history for the specified conversation (synchronous version)
+        
+        Args:
+            conversation_id: Conversation identifier
+            
+        Returns:
+            List[Dict[str, Any]]: List of conversation history records, each containing request ID,
+                                 status, context, response and other information
+        """
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            loop = new_loop
+            
+        try:
+            return loop.run_until_complete(self.async_get_conversation_history(conversation_id))
+        finally:
+            if loop != asyncio.get_event_loop():
+                loop.close()
 
-    def _create_timeout_task(
+
+    async def _async_create_timeout_task(
         self, 
         conversation_id: str,
         request_id: str, 

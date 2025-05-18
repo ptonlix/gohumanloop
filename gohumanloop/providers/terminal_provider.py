@@ -28,7 +28,7 @@ class TerminalProvider(BaseProvider):
         terminal_info = f"- Terminal Provider: Terminal-based human-in-the-loop implementation\n"
         return f"{terminal_info}{base_str}"
     
-    async def request_humanloop(
+    async def async_request_humanloop(
         self,
         task_id: str,
         conversation_id: str,
@@ -77,11 +77,11 @@ class TerminalProvider(BaseProvider):
         
         # Create timeout task if timeout is specified
         if timeout:
-            self._create_timeout_task(conversation_id, request_id, timeout)
+            await self._async_create_timeout_task(conversation_id, request_id, timeout)
         
         return result
         
-    async def check_request_status(
+    async def async_check_request_status(
         self,
         conversation_id: str,
         request_id: str
@@ -120,7 +120,7 @@ class TerminalProvider(BaseProvider):
         
         return result
         
-    async def continue_humanloop(
+    async def async_continue_humanloop(
         self,
         conversation_id: str,
         context: Dict[str, Any],
@@ -179,7 +179,7 @@ class TerminalProvider(BaseProvider):
         
         # Create timeout task if timeout is specified
         if timeout:
-            self._create_timeout_task(conversation_id, request_id, timeout)
+            await self._async_create_timeout_task(conversation_id, request_id, timeout)
         
         return result
     
@@ -205,14 +205,14 @@ class TerminalProvider(BaseProvider):
         
         # Handle different interaction types based on loop type
         if loop_type == HumanLoopType.APPROVAL:
-            await self._handle_approval_interaction(conversation_id, request_id, request_info)
+            await self._async_handle_approval_interaction(conversation_id, request_id, request_info)
         elif loop_type == HumanLoopType.INFORMATION:
-            await self._handle_information_interaction(conversation_id, request_id, request_info)
+            await self._async_handle_information_interaction(conversation_id, request_id, request_info)
         else:  # HumanLoopType.CONVERSATION
-            await self._handle_conversation_interaction(conversation_id, request_id, request_info)
+            await self._async_handle_conversation_interaction(conversation_id, request_id, request_info)
 
             
-    async def _handle_approval_interaction(self, conversation_id: str, request_id: str, request_info: Dict[str, Any]):
+    async def _async_handle_approval_interaction(self, conversation_id: str, request_id: str, request_info: Dict[str, Any]):
         """Handle approval type interaction
         
         Args:
@@ -238,7 +238,7 @@ class TerminalProvider(BaseProvider):
         else:
             print("\nInvalid input, please enter 'approve' or 'reject'")
             # Recursively handle approval interaction
-            await self._handle_approval_interaction(conversation_id, request_id, request_info)
+            await self._async_handle_approval_interaction(conversation_id, request_id, request_info)
             return
         
         # Update request information
@@ -249,7 +249,7 @@ class TerminalProvider(BaseProvider):
         
         print(f"\nYour decision has been recorded: {status.value}")
     
-    async def _handle_information_interaction(self, conversation_id: str, request_id: str, request_info: Dict[str, Any]):
+    async def _async_handle_information_interaction(self, conversation_id: str, request_id: str, request_info: Dict[str, Any]):
         """Handle information collection type interaction
         
         Args:
@@ -271,7 +271,7 @@ class TerminalProvider(BaseProvider):
         
         print("\nYour information has been recorded")
     
-    async def _handle_conversation_interaction(self, conversation_id: str, request_id: str, request_info: Dict[str, Any]):
+    async def _async_handle_conversation_interaction(self, conversation_id: str, request_id: str, request_info: Dict[str, Any]):
         """Handle conversation type interaction
         
         Args:

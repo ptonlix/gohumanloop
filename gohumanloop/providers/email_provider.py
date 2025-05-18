@@ -132,7 +132,7 @@ class EmailProvider(BaseProvider):
                 "powered_by": "Powered by GoHumanLoop"
             }
         
-    async def _send_email(
+    async def _async_send_email(
         self, 
         to_email: str, 
         subject: str, 
@@ -195,7 +195,7 @@ class EmailProvider(BaseProvider):
             logger.exception(f"Unknown error occurred while sending email: {str(e)}")
             raise
             
-    async def _check_emails(self, conversation_id: str, request_id: str, recipient_email: str, subject: str):
+    async def _async_check_emails(self, conversation_id: str, request_id: str, recipient_email: str, subject: str):
         """Check email replies
         
         Args:
@@ -603,7 +603,7 @@ class EmailProvider(BaseProvider):
         
         return text_body, "\n".join(html_body)
         
-    async def request_humanloop(
+    async def async_request_humanloop(
         self,
         task_id: str,
         conversation_id: str,
@@ -678,7 +678,7 @@ class EmailProvider(BaseProvider):
        
         
         # 发送邮件
-        success = await self._send_email(
+        success = await self._async_send_email(
             to_email=recipient_email,
             subject=subject,
             body=body,
@@ -701,13 +701,13 @@ class EmailProvider(BaseProvider):
         
         # 创建邮件检查任务
         check_task = asyncio.create_task(
-            self._check_emails(conversation_id, request_id, recipient_email, subject)
+            self._async_check_emails(conversation_id, request_id, recipient_email, subject)
         )
         self._mail_check_tasks[(conversation_id, request_id)] = check_task
         
         # 如果设置了超时，创建超时任务
         if timeout:
-            self._create_timeout_task(conversation_id, request_id, timeout)
+            await self._async_create_timeout_task(conversation_id, request_id, timeout)
             
         return HumanLoopResult(
             conversation_id=conversation_id,
@@ -716,7 +716,7 @@ class EmailProvider(BaseProvider):
             status=HumanLoopStatus.PENDING
         )
         
-    async def check_request_status(
+    async def async_check_request_status(
         self,
         conversation_id: str,
         request_id: str
@@ -755,7 +755,7 @@ class EmailProvider(BaseProvider):
         
         return result
         
-    async def continue_humanloop(
+    async def async_continue_humanloop(
         self,
         conversation_id: str,
         context: Dict[str, Any],
@@ -855,7 +855,7 @@ class EmailProvider(BaseProvider):
         body, html_body = self._format_email_body(prompt, HumanLoopType.CONVERSATION, subject)
 
         # 发送邮件
-        success = await self._send_email(
+        success = await self._async_send_email(
             to_email=recipient_email,
             subject=subject,
             body=body,
@@ -879,13 +879,13 @@ class EmailProvider(BaseProvider):
         
         # 创建邮件检查任务
         check_task = asyncio.create_task(
-            self._check_emails(conversation_id, request_id, recipient_email, subject)
+            self._async_check_emails(conversation_id, request_id, recipient_email, subject)
         )
         self._mail_check_tasks[(conversation_id, request_id)] = check_task
 
         # 如果设置了超时，创建超时任务
         if timeout:
-            self._create_timeout_task(conversation_id, request_id, timeout)
+            await self._async_create_timeout_task(conversation_id, request_id, timeout)
             
         return HumanLoopResult(
             conversation_id=conversation_id,
@@ -894,7 +894,7 @@ class EmailProvider(BaseProvider):
             status=HumanLoopStatus.PENDING
         )
 
-    async def cancel_request(
+    async def async_cancel_request(
         self,
         conversation_id: str,
         request_id: str
@@ -916,9 +916,9 @@ class EmailProvider(BaseProvider):
             del self._mail_check_tasks[request_key]
             
         # 调用父类方法取消请求
-        return await super().cancel_request(conversation_id, request_id)
+        return await super().async_cancel_request(conversation_id, request_id)
         
-    async def cancel_conversation(
+    async def async_cancel_conversation(
         self,
         conversation_id: str
     ) -> bool:
@@ -938,7 +938,7 @@ class EmailProvider(BaseProvider):
                 del self._mail_check_tasks[request_key]
                 
         # 调用父类方法取消对话
-        return await super().cancel_conversation(conversation_id)
+        return await super().async_cancel_conversation(conversation_id)
 
     def _extract_user_reply_content(self, body: str) -> str:
         """Extract the actual reply content from the email, excluding quoted original email content
