@@ -12,11 +12,17 @@ from gohumanloop.manager.ghl_manager import GoHumanLoopManager
 
 from gohumanloop.providers.ghl_provider import GoHumanLoopProvider
 from gohumanloop.providers.api_provider import APIProvider
-from gohumanloop.providers.email_provider import EmailProvider
 from gohumanloop.providers.base import BaseProvider
 from gohumanloop.providers.terminal_provider import TerminalProvider
 
 from gohumanloop.utils import run_async_safely, get_secret_from_env
+
+# Conditionally import EmailProvider
+try:
+    from gohumanloop.providers.email_provider import EmailProvider
+    _has_email = True
+except ImportError:
+    _has_email = False
 
 # Dynamically get version number
 try:
@@ -53,7 +59,6 @@ __all__ = [
     "BaseProvider",
     "APIProvider",
     "GoHumanLoopProvider",
-    "EmailProvider",
     "TerminalProvider",
     
     # Utility Functions
@@ -63,3 +68,6 @@ __all__ = [
     # Version Information
     "__version__",
 ]
+
+if _has_email:
+    __all__.append("EmailProvider")

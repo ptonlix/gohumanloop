@@ -1,6 +1,7 @@
 from typing import Dict, Any, Optional, List, Union, Set
 import asyncio
 import time
+from gohumanloop.utils import run_async_safely
 
 from gohumanloop.core.interface import (
     HumanLoopManager, HumanLoopProvider, HumanLoopCallback,
@@ -150,15 +151,8 @@ class DefaultHumanLoopManager(HumanLoopManager):
         blocking: bool = False,
     ) -> Union[str, HumanLoopResult]:
         """请求人机循环（同步版本）"""
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # 如果事件循环已经在运行，创建一个新的事件循环
-            new_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(new_loop)
-            loop = new_loop
-            
-        try:
-            return loop.run_until_complete(
+
+        return run_async_safely(
                 self.async_request_humanloop(
                     task_id=task_id,
                     conversation_id=conversation_id,
@@ -171,9 +165,7 @@ class DefaultHumanLoopManager(HumanLoopManager):
                     blocking=blocking
                 )
             )
-        finally:
-            if loop != asyncio.get_event_loop():
-                loop.close()
+
 
     async def async_continue_humanloop(
         self,
@@ -267,15 +259,8 @@ class DefaultHumanLoopManager(HumanLoopManager):
         blocking: bool = False,
     ) -> Union[str, HumanLoopResult]:
         """继续人机循环（同步版本）"""
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # 如果事件循环已经在运行，创建一个新的事件循环
-            new_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(new_loop)
-            loop = new_loop
-            
-        try:
-            return loop.run_until_complete(
+
+        return run_async_safely(
                 self.async_continue_humanloop(
                     conversation_id=conversation_id,
                     context=context,
@@ -286,9 +271,6 @@ class DefaultHumanLoopManager(HumanLoopManager):
                     blocking=blocking
                 )
             )
-        finally:
-            if loop != asyncio.get_event_loop():
-                loop.close()
 
     async def async_check_request_status(
         self,
@@ -334,24 +316,14 @@ class DefaultHumanLoopManager(HumanLoopManager):
         provider_id: Optional[str] = None
     ) -> HumanLoopResult:
         """检查请求状态（同步版本）"""
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # 如果事件循环已经在运行，创建一个新的事件循环
-            new_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(new_loop)
-            loop = new_loop
-            
-        try:
-            return loop.run_until_complete(
+
+        return run_async_safely(
                 self.async_check_request_status(
                     conversation_id=conversation_id,
                     request_id=request_id,
                     provider_id=provider_id
                 )
             )
-        finally:
-            if loop != asyncio.get_event_loop():
-                loop.close()
 
 
     async def async_check_conversation_status(
@@ -394,23 +366,13 @@ class DefaultHumanLoopManager(HumanLoopManager):
         provider_id: Optional[str] = None
     ) -> HumanLoopResult:
         """检查对话状态（同步版本）"""
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # 如果事件循环已经在运行，创建一个新的事件循环
-            new_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(new_loop)
-            loop = new_loop
-            
-        try:
-            return loop.run_until_complete(
+
+        return run_async_safely(
                 self.async_check_conversation_status(
                     conversation_id=conversation_id,
                     provider_id=provider_id
                 )
             )
-        finally:
-            if loop != asyncio.get_event_loop():
-                loop.close()
 
     async def async_cancel_request(
         self,
@@ -456,25 +418,14 @@ class DefaultHumanLoopManager(HumanLoopManager):
         provider_id: Optional[str] = None
     ) -> bool:
         """取消特定请求（同步版本）"""
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # 如果事件循环已经在运行，创建一个新的事件循环
-            new_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(new_loop)
-            loop = new_loop
-            
-        try:
-            return loop.run_until_complete(
+
+        return run_async_safely(
                 self.async_cancel_request(
                     conversation_id=conversation_id,
                     request_id=request_id,
                     provider_id=provider_id
                 )
             )
-        finally:
-            if loop != asyncio.get_event_loop():
-                loop.close()
-
 
     async def async_cancel_conversation(
         self,
@@ -547,25 +498,14 @@ class DefaultHumanLoopManager(HumanLoopManager):
         provider_id: Optional[str] = None
     ) -> bool:
         """取消整个对话（同步版本）"""
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # 如果事件循环已经在运行，创建一个新的事件循环
-            new_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(new_loop)
-            loop = new_loop
-            
-        try:
-            return loop.run_until_complete(
+                
+        return run_async_safely(
                 self.async_cancel_conversation(
                     conversation_id=conversation_id,
                     provider_id=provider_id
                 )
             )
-        finally:
-            if loop != asyncio.get_event_loop():
-                loop.close()
 
-                
     async def async_get_provider(
         self,
         provider_id: Optional[str] = None
@@ -582,20 +522,10 @@ class DefaultHumanLoopManager(HumanLoopManager):
         provider_id: Optional[str] = None
     ) -> HumanLoopProvider:
         """获取指定的提供者实例（同步版本）"""
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # 如果事件循环已经在运行，创建一个新的事件循环
-            new_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(new_loop)
-            loop = new_loop
-            
-        try:
-            return loop.run_until_complete(
+
+        return run_async_safely(
                 self.async_get_provider(provider_id=provider_id)
             )
-        finally:
-            if loop != asyncio.get_event_loop():
-                loop.close()
 
     async def async_list_providers(self) -> Dict[str, HumanLoopProvider]:
         """列出所有注册的提供者"""
@@ -604,18 +534,11 @@ class DefaultHumanLoopManager(HumanLoopManager):
 
     def list_providers(self) -> Dict[str, HumanLoopProvider]:
         """列出所有注册的提供者（同步版本）"""
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # 如果事件循环已经在运行，创建一个新的事件循环
-            new_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(new_loop)
-            loop = new_loop
-            
-        try:
-            return loop.run_until_complete(self.async_list_providers())
-        finally:
-            if loop != asyncio.get_event_loop():
-                loop.close()
+        
+        return run_async_safely(
+                self.async_list_providers()
+            )
+
 
 
     async def async_set_default_provider(
@@ -635,21 +558,11 @@ class DefaultHumanLoopManager(HumanLoopManager):
         provider_id: str
     ) -> bool:
         """设置默认提供者（同步版本）"""
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # 如果事件循环已经在运行，创建一个新的事件循环
-            new_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(new_loop)
-            loop = new_loop
-            
-        try:
-            return loop.run_until_complete(
+
+
+        return run_async_safely(
                 self.async_set_default_provider(provider_id=provider_id)
             )
-        finally:
-            if loop != asyncio.get_event_loop():
-                loop.close()
-
 
     async def _async_create_timeout_task(
         self, 

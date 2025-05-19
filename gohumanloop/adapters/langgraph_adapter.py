@@ -5,11 +5,14 @@ import uuid
 import time
 from inspect import iscoroutinefunction
 from contextlib import asynccontextmanager, contextmanager
+import logging
 
 from gohumanloop.utils import run_async_safely
 from gohumanloop.core.interface import (
     HumanLoopManager, HumanLoopResult, HumanLoopStatus, HumanLoopType, HumanLoopCallback, HumanLoopProvider
 )
+
+logger = logging.getLogger(__name__)
 
 # Define TypeVars for input and output types
 T = TypeVar("T")
@@ -658,9 +661,7 @@ def default_langgraph_callback_factory(state: Any) -> LangGraphHumanLoopCallback
     Returns:
         Configured LangGraphHumanLoopCallback instance
     """
-    import logging
-    
-    logger = logging.getLogger("gohumanloop.langgraph")
+
     
     async def async_on_update(state, provider: HumanLoopProvider, result: HumanLoopResult):
         """Log human interaction update events"""
@@ -739,16 +740,19 @@ def interrupt(value: Any, lg_humanloop: LangGraphAdapter = default_adapter) -> A
     
     if not _SKIP_NEXT_HUMANLOOP:
         # Get current event loop or create new one
-        lg_humanloop.manager.request_humanloop(
-            task_id="lg_interrupt",
-            conversation_id=default_conversation_id,
-            loop_type=HumanLoopType.INFORMATION,
-            context={
-                "message": f"{value}",
-                "question": "The execution has been interrupted. Please review the above information and provide your input to continue.",
-            },
-            blocking=False,
-        )
+        try:
+            lg_humanloop.manager.request_humanloop(
+                task_id="lg_interrupt",
+                conversation_id=default_conversation_id,
+                loop_type=HumanLoopType.INFORMATION,
+                context={
+                    "message": f"{value}",
+                    "question": "The execution has been interrupted. Please review the above information and provide your input to continue.",
+                },
+                blocking=False,
+            )
+        except Exception as e:
+            logger.exception(f"Error in interrupt: {e}")
     else:
         # Reset flag to allow normal human intervention trigger next time
         _SKIP_NEXT_HUMANLOOP = False
