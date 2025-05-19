@@ -3,6 +3,9 @@ import os
 from typing import Optional, Union
 from pydantic import SecretStr
 import warnings
+import logging
+
+logger = logging.getLogger(__name__)
 
 def run_async_safely(coro):
     """
@@ -25,12 +28,12 @@ def run_async_safely(coro):
     # Handle synchronous environment
     try:
         loop = asyncio.get_event_loop()
-        print("Using existing event loop.")
+        logger.info("Using existing event loop.")
     except RuntimeError:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         own_loop = True
-        print("Created new event loop.")
+        logger.info("Created new event loop.")
     else:
         own_loop = False
     

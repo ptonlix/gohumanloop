@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional
 
 import aiohttp
 from pydantic import SecretStr
-
+from concurrent.futures import ThreadPoolExecutor
 from gohumanloop.core.interface import (
     HumanLoopResult, HumanLoopStatus, HumanLoopType
 )
@@ -56,6 +56,18 @@ class APIProvider(BaseProvider):
         
         # Store the currently running polling tasks.
         self._poll_tasks = {}
+         # Create thread pool for background service execution
+        self._executor = ThreadPoolExecutor(max_workers=10)
+
+
+    def __del__(self):
+        """析构函数，确保线程池被正确关闭"""
+        self._executor.shutdown(wait=False)
+
+        # 取消所有邮件检查任务
+        for task_key, future in list(self._poll_tasks.items()):
+            future.cancel()
+        self._poll_tasks.clear()
         
     def __str__(self) -> str:
         """Returns a string description of this instance"""
@@ -230,10 +242,9 @@ class APIProvider(BaseProvider):
                 )
                 
             # Create polling task
-            poll_task = asyncio.create_task(
-                self._async_poll_request_status(conversation_id, request_id, platform)
+            self._poll_tasks[(conversation_id, request_id)] = self._executor.submit(
+            self._run_async_poll_request_status, conversation_id, request_id, platform
             )
-            self._poll_tasks[(conversation_id, request_id)] = poll_task
             
             # Create timeout task if timeout is set
             if timeout:
@@ -258,6 +269,22 @@ class APIProvider(BaseProvider):
                 status=HumanLoopStatus.ERROR,
                 error=str(e)
             )
+
+    def _run_async_poll_request_status(self, conversation_id: str, request_id: str, platform: str):
+        """Run asynchronous API interaction in a separate thread"""
+        # Create new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        try:
+            # Run interaction processing in the new event loop
+            loop.run_until_complete(self._async_poll_request_status(conversation_id, request_id, platform))
+        finally:
+            loop.close()
+            # Remove from task dictionary
+            if (conversation_id, request_id) in self._poll_tasks:
+                del self._poll_tasks[(conversation_id, request_id)]
+
     async def async_check_request_status(
         self,
         conversation_id: str,
@@ -516,11 +543,10 @@ class APIProvider(BaseProvider):
                     error=error_msg
                 )
                 
-            # Create polling task
-            poll_task = asyncio.create_task(
-                self._async_poll_request_status(conversation_id, request_id, platform)
+             # Create polling task
+            self._poll_tasks[(conversation_id, request_id)] = self._executor.submit(
+            self._run_async_poll_request_status, conversation_id, request_id, platform
             )
-            self._poll_tasks[(conversation_id, request_id)] = poll_task
             
             # Create timeout task if timeout is set
             if timeout:

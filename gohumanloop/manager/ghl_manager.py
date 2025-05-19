@@ -434,7 +434,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
         Returns:
             HumanLoopResult: 请求状态结果
         """
-        # 如果没有指定provider_id，从存储的映射中获取
+        # check_request_status
         if provider_id is None:
             provider_id = self._conversation_provider.get(conversation_id)
             
@@ -442,7 +442,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
             raise ValueError(f"Provider '{provider_id}' not found")
             
         provider = self.providers[provider_id]
-        return await provider.check_request_status(conversation_id, request_id)
+        return await provider.async_check_request_status(conversation_id, request_id)
 
     async def async_check_request_status(
         self,

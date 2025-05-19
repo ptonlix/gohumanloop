@@ -1,8 +1,6 @@
 import asyncio
-from email import message
-import sys
-import json
-from typing import Dict, Any, Optional, List
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, Any, Optional
 from datetime import datetime
 
 from gohumanloop.core.interface import (HumanLoopResult, HumanLoopStatus, HumanLoopType)
@@ -22,7 +20,21 @@ class TerminalProvider(BaseProvider):
             name: Provider name
             config: Configuration options, may include:
         """
-        super().__init__(name, config) 
+        super().__init__(name, config)
+
+        # Store running terminal input tasks
+        self._terminal_input_tasks = {}
+        # Create thread pool for background service execution
+        self._executor = ThreadPoolExecutor(max_workers=10)
+
+    def __del__(self):
+        """Destructor to ensure thread pool is properly closed"""
+        self._executor.shutdown(wait=False)
+
+        for task_key, future in list(self._terminal_input_tasks.items()):
+            future.cancel()
+        self._terminal_input_tasks.clear()
+
     def __str__(self) -> str:
         base_str = super().__str__()
         terminal_info = f"- Terminal Provider: Terminal-based human-in-the-loop implementation\n"
@@ -72,15 +84,31 @@ class TerminalProvider(BaseProvider):
             status=HumanLoopStatus.PENDING
         )
         
-        # Start async task to process user input
-        asyncio.create_task(self._process_terminal_interaction(conversation_id, request_id))
-        
+
+        self._terminal_input_tasks[(conversation_id, request_id)] = self._executor.submit(self._run_async_terminal_interaction, conversation_id, request_id)
+
         # Create timeout task if timeout is specified
         if timeout:
             await self._async_create_timeout_task(conversation_id, request_id, timeout)
         
         return result
+
+
+    def _run_async_terminal_interaction(self, conversation_id: str, request_id: str):
+        """Run asynchronous terminal interaction in a separate thread"""
+        # Create new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         
+        try:
+            # Run interaction processing in the new event loop
+            loop.run_until_complete(self._process_terminal_interaction(conversation_id, request_id))
+        finally:
+            loop.close()
+            # Remove from task dictionary
+            if (conversation_id, request_id) in self._terminal_input_tasks:
+                del self._terminal_input_tasks[(conversation_id, request_id)]
+
     async def async_check_request_status(
         self,
         conversation_id: str,
@@ -175,7 +203,7 @@ class TerminalProvider(BaseProvider):
         )
         
         # Start async task to process user input
-        asyncio.create_task(self._process_terminal_interaction(conversation_id, request_id))
+        self._terminal_input_tasks[(conversation_id, request_id)] = self._executor.submit(self._run_async_terminal_interaction, conversation_id, request_id)
         
         # Create timeout task if timeout is specified
         if timeout:
@@ -299,3 +327,48 @@ class TerminalProvider(BaseProvider):
         request_info["responded_at"] = datetime.now().isoformat()
         
         print("\nYour response has been recorded")
+
+    async def async_cancel_request(
+        self,
+        conversation_id: str,
+        request_id: str
+    ) -> bool:
+        """Cancel human-in-the-loop request
+        
+        Args:
+            conversation_id: Conversation identifier for multi-turn dialogues
+            request_id: Request identifier for specific interaction request
+            
+        Return:
+            bool: Whether cancellation was successful, True indicates successful cancellation,
+                 False indicates cancellation failed
+        """
+        request_key = (conversation_id, request_id)
+        if request_key in self._terminal_input_tasks:
+            self._terminal_input_tasks[request_key].cancel()
+            del self._terminal_input_tasks[request_key]
+            
+        # 调用父类方法取消请求
+        return await super().async_cancel_request(conversation_id, request_id)
+        
+    async def async_cancel_conversation(
+        self,
+        conversation_id: str
+    ) -> bool:
+        """Cancel the entire conversation
+        
+        Args:
+            conversation_id: Conversation identifier
+            
+        Returns:
+            bool: Whether cancellation was successful
+        """
+        # 取消所有相关的邮件检查任务
+        for request_id in self._get_conversation_requests(conversation_id):
+            request_key = (conversation_id, request_id)
+            if request_key in self._terminal_input_tasks:
+                self._terminal_input_tasks[request_key].cancel()
+                del self._terminal_input_tasks[request_key]
+                
+        # 调用父类方法取消对话
+        return await super().async_cancel_conversation(conversation_id)

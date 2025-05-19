@@ -12,6 +12,7 @@ import logging
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
 from pydantic import SecretStr
+from concurrent.futures import ThreadPoolExecutor
 
 from gohumanloop.core.interface import ( HumanLoopResult, HumanLoopStatus, HumanLoopType
 )
@@ -78,6 +79,19 @@ class EmailProvider(BaseProvider):
         self._thread_to_conversation = {}
 
         self._init_language_templates()
+
+        # Create thread pool for background service execution
+        self._executor = ThreadPoolExecutor(max_workers=10)
+
+
+    def __del__(self):
+        """析构函数，确保线程池被正确关闭"""
+        self._executor.shutdown(wait=False)
+
+        # 取消所有邮件检查任务
+        for task_key, future in list(self._mail_check_tasks.items()):
+            future.cancel()
+        self._mail_check_tasks.clear()
 
     def _init_language_templates(self):
         """初始化不同语言的模板和关键词"""
@@ -700,10 +714,11 @@ class EmailProvider(BaseProvider):
         self._subject_to_request[subject] = (conversation_id, request_id)
         
         # 创建邮件检查任务
-        check_task = asyncio.create_task(
-            self._async_check_emails(conversation_id, request_id, recipient_email, subject)
+        # 使用线程池执行邮件检查任务，而不是使用asyncio.create_task
+        self._mail_check_tasks[(conversation_id, request_id)] = self._executor.submit(
+            self._run_email_check_task, conversation_id, request_id, recipient_email, subject
         )
-        self._mail_check_tasks[(conversation_id, request_id)] = check_task
+        
         
         # 如果设置了超时，创建超时任务
         if timeout:
@@ -715,7 +730,37 @@ class EmailProvider(BaseProvider):
             loop_type=loop_type,
             status=HumanLoopStatus.PENDING
         )
+
+    def _run_email_check_task(self, conversation_id: str, request_id: str, recipient_email: str, subject: str):
+        """Run email check task in thread
         
+        Args:
+            conversation_id: Conversation ID
+            request_id: Request ID
+            recipient_email: Recipient email address
+            subject: Email subject
+        """
+        # Create new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            # Run email check in new event loop
+            loop.run_until_complete(
+                self._async_check_emails(conversation_id, request_id, recipient_email, subject)
+            )
+        except Exception as e:
+            logger.error(f"Email check task error: {str(e)}", exc_info=True)
+            # Update request status to error
+            self._update_request_status_error(conversation_id, request_id, f"Email check task error: {str(e)}")
+        finally:
+            # Close event loop
+            loop.close()
+            # Remove from task dictionary
+            if (conversation_id, request_id) in self._mail_check_tasks:
+                del self._mail_check_tasks[(conversation_id, request_id)]
+
+    
     async def async_check_request_status(
         self,
         conversation_id: str,
@@ -876,13 +921,12 @@ class EmailProvider(BaseProvider):
             
         # 存储主题与请求的映射关系
         self._subject_to_request[subject] = (conversation_id, request_id)
-        
-        # 创建邮件检查任务
-        check_task = asyncio.create_task(
-            self._async_check_emails(conversation_id, request_id, recipient_email, subject)
-        )
-        self._mail_check_tasks[(conversation_id, request_id)] = check_task
 
+        # 使用线程池执行邮件检查任务，而不是使用asyncio.create_task
+        self._mail_check_tasks[(conversation_id, request_id)] = self._executor.submit(
+            self._run_email_check_task, conversation_id, request_id, recipient_email, subject
+        )
+        
         # 如果设置了超时，创建超时任务
         if timeout:
             await self._async_create_timeout_task(conversation_id, request_id, timeout)

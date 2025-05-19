@@ -22,6 +22,9 @@ from gohumanloop.manager.ghl_manager import GoHumanLoopManager
 from gohumanloop.adapters.langgraph_adapter import LangGraphAdapter
 from gohumanloop.core.interface import HumanLoopStatus
 
+import logging
+logging.basicConfig(level=logging.INFO)
+
 # 设置环境变量
 os.environ["GOHUMANLOOP_API_KEY"] = "gohumanloop"
 os.environ["GOHUMANLOOP_API_BASE_URL"] = "http://localhost:8000/api"

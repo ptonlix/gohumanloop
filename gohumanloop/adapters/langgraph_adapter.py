@@ -633,7 +633,7 @@ class LangGraphHumanLoopCallback(HumanLoopCallback):
         if self.async_on_timeout:
             await self.async_on_timeout(self.state, provider)
 
-    async def async_humanloop_on_error(
+    async def async_on_humanloop_error(
         self,
         provider: HumanLoopProvider,
         error: Exception
@@ -713,6 +713,8 @@ default_adapter = LangGraphAdapter(manager, default_timeout=60)
 
 default_conversation_id = str(uuid.uuid4())
 
+_SKIP_NEXT_HUMANLOOP = False
+
 def interrupt(value: Any, lg_humanloop: LangGraphAdapter = default_adapter) -> Any:
     """
     Wraps LangGraph's interrupt functionality to pause graph execution and wait for human input
@@ -726,23 +728,31 @@ def interrupt(value: Any, lg_humanloop: LangGraphAdapter = default_adapter) -> A
     Returns:
         Input value provided by human user
     """
+
+    global _SKIP_NEXT_HUMANLOOP
+
     if not _SUPPORTS_INTERRUPT:
         raise RuntimeError(
             "LangGraph version too low, interrupt not supported. Please upgrade to version 0.2.57 or higher."
             "You can use: pip install --upgrade langgraph>=0.2.57"
         )
     
-    # Get current event loop or create new one
-    lg_humanloop.manager.request_humanloop(
-        task_id="lg_interrupt",
-        conversation_id=default_conversation_id,
-        loop_type=HumanLoopType.INFORMATION,
-        context={
-            "message": f"{value}",
-            "question": "The execution has been interrupted. Please review the above information and provide your input to continue.",
-        },
-        blocking=False,
-    )
+    if not _SKIP_NEXT_HUMANLOOP:
+        # Get current event loop or create new one
+        lg_humanloop.manager.request_humanloop(
+            task_id="lg_interrupt",
+            conversation_id=default_conversation_id,
+            loop_type=HumanLoopType.INFORMATION,
+            context={
+                "message": f"{value}",
+                "question": "The execution has been interrupted. Please review the above information and provide your input to continue.",
+            },
+            blocking=False,
+        )
+    else:
+        # Reset flag to allow normal human intervention trigger next time
+        _SKIP_NEXT_HUMANLOOP = False
+
 
     # Return LangGraph's interrupt
     return _lg_interrupt(value)
@@ -758,6 +768,9 @@ def create_resume_command(lg_humanloop: LangGraphAdapter = default_adapter) -> A
     Returns:
         Command object that can be used with graph.stream method
     """
+
+    global _SKIP_NEXT_HUMANLOOP
+
     if not _SUPPORTS_INTERRUPT:
         raise RuntimeError(
             "LangGraph version too low, Command feature not supported. Please upgrade to 0.2.57 or higher."
@@ -769,15 +782,13 @@ def create_resume_command(lg_humanloop: LangGraphAdapter = default_adapter) -> A
         poll_interval = 1.0  # Polling interval (seconds)
         while True:
             result = lg_humanloop.manager.check_conversation_status(default_conversation_id)
-            print(result)
             # If status is final state (not PENDING), return result
             if result.status != HumanLoopStatus.PENDING:
                 return result.response
             # Wait before polling again
             time.sleep(poll_interval)
-    
-    # Wait for async result synchronously
-    # loop = asyncio.get_event_loop() # In synchronous environment
+
+    _SKIP_NEXT_HUMANLOOP = True
 
     response = poll_for_result()
     return _lg_Command(resume=response)
@@ -794,6 +805,8 @@ async def acreate_resume_command(lg_humanloop: LangGraphAdapter = default_adapte
     Returns:
         Command object that can be used with graph.astream method
     """
+    global _SKIP_NEXT_HUMANLOOP
+
     if not _SUPPORTS_INTERRUPT:
         raise RuntimeError(
             "LangGraph version too low, Command feature not supported. Please upgrade to 0.2.57 or higher."
@@ -811,6 +824,8 @@ async def acreate_resume_command(lg_humanloop: LangGraphAdapter = default_adapte
             # Wait before polling again
             await asyncio.sleep(poll_interval)
     
+    _SKIP_NEXT_HUMANLOOP = True
+
     # Wait for async result directly
     response = await poll_for_result()
     return _lg_Command(resume=response)
