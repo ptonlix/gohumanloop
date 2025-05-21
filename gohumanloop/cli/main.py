@@ -18,8 +18,11 @@ def cli() -> None:
 def cli_check() -> None:
     try:
         import gohumanloop
+
         click.echo("gohumanloop library is successfully installed!")
-        click.echo(f"Version: {gohumanloop.__version__ if hasattr(gohumanloop, '__version__') else 'Unknown'}")
+        click.echo(
+            f"Version: {gohumanloop.__version__ if hasattr(gohumanloop, '__version__') else 'Unknown'}"
+        )
     except ImportError:
         click.echo("Error: gohumanloop library is not installed or cannot be imported.")
         click.echo("Please use 'pip install gohumanloop' to install the library.")

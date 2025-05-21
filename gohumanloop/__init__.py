@@ -20,6 +20,7 @@ from gohumanloop.utils import run_async_safely, get_secret_from_env
 # Conditionally import EmailProvider
 try:
     from gohumanloop.providers.email_provider import EmailProvider
+
     _has_email = True
 except ImportError:
     _has_email = False
@@ -27,15 +28,16 @@ except ImportError:
 # Dynamically get version number
 try:
     from importlib.metadata import version, PackageNotFoundError
+
     try:
         __version__ = version("gohumanloop")
     except PackageNotFoundError:
         import os
         import tomli
-        
+
         root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         pyproject_path = os.path.join(root_dir, "pyproject.toml")
-        
+
         with open(pyproject_path, "rb") as f:
             pyproject_data = tomli.load(f)
             __version__ = pyproject_data["project"]["version"]
@@ -50,21 +52,17 @@ __all__ = [
     "HumanLoopResult",
     "HumanLoopStatus",
     "HumanLoopType",
-    
     # Manager Implementations
     "DefaultHumanLoopManager",
     "GoHumanLoopManager",
-    
     # Provider Implementations
     "BaseProvider",
     "APIProvider",
     "GoHumanLoopProvider",
     "TerminalProvider",
-    
     # Utility Functions
     "run_async_safely",
     "get_secret_from_env",
-    
     # Version Information
     "__version__",
 ]

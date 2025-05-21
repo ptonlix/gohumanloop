@@ -9,15 +9,18 @@ import logging
 from gohumanloop.core.interface import HumanLoopStatus
 from gohumanloop.core.manager import DefaultHumanLoopManager
 from gohumanloop.providers.terminal_provider import TerminalProvider
-from gohumanloop.adapters.langgraph_adapter import LangGraphAdapter, default_langgraph_callback_factory
+from gohumanloop.adapters.langgraph_adapter import (
+    LangGraphAdapter,
+    default_langgraph_callback_factory,
+)
 
 # 配置日志
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("gohumanloop.langgraph")
 logger.setLevel(logging.INFO)
+
 
 # 定义工作流状态
 class WorkflowState(TypedDict):
@@ -26,42 +29,49 @@ class WorkflowState(TypedDict):
     approved: bool
     review_feedback: str
 
+
 # 模拟一个 HumanLoopManager 实例
-manager = DefaultHumanLoopManager(initial_providers=TerminalProvider(name="TerminalProvider"))
+manager = DefaultHumanLoopManager(
+    initial_providers=TerminalProvider(name="TerminalProvider")
+)
 adapter = LangGraphAdapter(manager)
+
 
 # 定义工作流节点
 @adapter.require_approval(
     callback=default_langgraph_callback_factory,
     ret_key="approval_info",
-    execute_on_reject=True
+    execute_on_reject=True,
 )
 def review_output(state: WorkflowState, approval_info=None) -> WorkflowState:
     """审查输入的内容"""
     logger.info(f"开始审查输出 - 当前状态: {state}")
-    
-    if approval_info and approval_info.get('status') == HumanLoopStatus.APPROVED:
-        state['approved'] = True
-        state['review_feedback'] = approval_info.get('response', '')
-    elif approval_info and approval_info.get('status') == HumanLoopStatus.REJECTED:
-        state['approved'] = False
-        state['review_feedback'] = approval_info.get('response', '')
+
+    if approval_info and approval_info.get("status") == HumanLoopStatus.APPROVED:
+        state["approved"] = True
+        state["review_feedback"] = approval_info.get("response", "")
+    elif approval_info and approval_info.get("status") == HumanLoopStatus.REJECTED:
+        state["approved"] = False
+        state["review_feedback"] = approval_info.get("response", "")
         logger.info(f"审批未通过 - 反馈: {state['review_feedback']}")
-    
+
     return state
+
 
 def generate_output(state: WorkflowState) -> WorkflowState:
     """生成输出内容"""
-    if state.get('review_feedback'):
+    if state.get("review_feedback"):
         logger.info(f"审批反馈 - {state['review_feedback']}")
-    state['input'] = input("请输入要审批的内容: ") 
-    state['output'] = state['input']
+    state["input"] = input("请输入要审批的内容: ")
+    state["output"] = state["input"]
     logger.info(f"通过审批的内容: {state['output']}")
     return state
 
+
 def should_end(state: WorkflowState) -> bool:
     """判断是否结束工作流"""
-    return state.get('approved', False)
+    return state.get("approved", False)
+
 
 # 构建工作流图
 workflow = StateGraph(WorkflowState)
@@ -78,29 +88,29 @@ workflow.add_conditional_edges(
     should_end,
     {
         True: END,  # 如果审批通过，结束工作流
-        False: "generate"  # 如果审批未通过，重新生成
-    }
+        False: "generate",  # 如果审批未通过，重新生成
+    },
 )
 
 # 编译工作流
 app = workflow.compile()
 
+
 # 使用示例
 async def run_workflow():
     logger.info("开始执行工作流")
     initial_state = WorkflowState(
-        input="",
-        output="",
-        approved=False,
-        review_feedback=""
+        input="", output="", approved=False, review_feedback=""
     )
-    
+
     try:
         final_state = await app.ainvoke(initial_state)
         logger.info(f"工作流执行完成 - 最终状态: {final_state}")
     except Exception as e:
         logger.error(f"工作流执行出错: {e}", exc_info=True)
 
+
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(run_workflow())

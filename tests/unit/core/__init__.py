@@ -4,7 +4,7 @@ tests/unit/core/test_interface.py
 - 测试 HumanLoopStatus 枚举类型
 - 测试 HumanLoopResult 数据类
 - 测试 HumanLoopCallback 接口
-- 测试 HumanLoopProvider 协议 
+- 测试 HumanLoopProvider 协议
 
 tests/unit/core/test_manager.py
 - 测试 DefaultHumanLoopManager 类的初始化

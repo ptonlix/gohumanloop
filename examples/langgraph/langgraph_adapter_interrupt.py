@@ -9,6 +9,7 @@ from langgraph.graph import StateGraph
 
 from gohumanloop.adapters.langgraph_adapter import interrupt, create_resume_command
 
+
 class State(TypedDict):
     """The graph state."""
 

@@ -11,7 +11,7 @@ from gohumanloop.core.interface import (
     HumanLoopResult,
     HumanLoopCallback,
     HumanLoopProvider,
-    HumanLoopRequest
+    HumanLoopRequest,
 )
 
 
@@ -73,9 +73,9 @@ class TestHumanLoopResult(unittest.TestCase):
             conversation_id="test-conversation",
             request_id="test-request",
             loop_type=HumanLoopType.APPROVAL,
-            status=HumanLoopStatus.PENDING
+            status=HumanLoopStatus.PENDING,
         )
-        
+
         self.assertEqual(result.conversation_id, "test-conversation")
         self.assertEqual(result.request_id, "test-request")
         self.assertEqual(result.loop_type, HumanLoopType.APPROVAL)
@@ -97,9 +97,9 @@ class TestHumanLoopResult(unittest.TestCase):
             feedback={"comment": "looks good"},
             responded_by="user1",
             responded_at="2023-01-01T12:00:00Z",
-            error=None
+            error=None,
         )
-        
+
         self.assertEqual(result.conversation_id, "test-conversation")
         self.assertEqual(result.request_id, "test-request")
         self.assertEqual(result.loop_type, HumanLoopType.APPROVAL)
@@ -117,9 +117,9 @@ class TestHumanLoopResult(unittest.TestCase):
             request_id="test-request",
             loop_type=HumanLoopType.APPROVAL,
             status=HumanLoopStatus.ERROR,
-            error="Something went wrong"
+            error="Something went wrong",
         )
-        
+
         self.assertEqual(result.status, HumanLoopStatus.ERROR)
         self.assertEqual(result.error, "Something went wrong")
 
@@ -133,9 +133,9 @@ class TestHumanLoopRequest(unittest.TestCase):
             task_id="test-task",
             conversation_id="test-conversation",
             loop_type=HumanLoopType.APPROVAL,
-            context={"message": "Please approve this action"}
+            context={"message": "Please approve this action"},
         )
-        
+
         self.assertEqual(request.task_id, "test-task")
         self.assertEqual(request.conversation_id, "test-conversation")
         self.assertEqual(request.loop_type, HumanLoopType.APPROVAL)
@@ -156,9 +156,9 @@ class TestHumanLoopRequest(unittest.TestCase):
             metadata={"priority": "high"},
             request_id="test-request",
             timeout=60,
-            created_at=created_time
+            created_at=created_time,
         )
-        
+
         self.assertEqual(request.task_id, "test-task")
         self.assertEqual(request.conversation_id, "test-conversation")
         self.assertEqual(request.loop_type, HumanLoopType.INFORMATION)
@@ -172,7 +172,7 @@ class TestHumanLoopRequest(unittest.TestCase):
 # 创建一个实现 HumanLoopCallback 的测试类
 class MockCallbackImplementation(HumanLoopCallback):
     """测试 HumanLoopCallback 接口的实现类"""
-    
+
     def __init__(self):
         self.update_called = False
         self.timeout_called = False
@@ -180,16 +180,16 @@ class MockCallbackImplementation(HumanLoopCallback):
         self.last_result = None
         self.last_provider = None
         self.last_error = None
-    
+
     async def on_humanloop_update(self, provider, result):
         self.update_called = True
         self.last_provider = provider
         self.last_result = result
-    
+
     async def on_humanloop_timeout(self, provider):
         self.timeout_called = True
         self.last_provider = provider
-    
+
     async def on_humanloop_error(self, provider, error):
         self.error_called = True
         self.last_provider = provider
@@ -205,25 +205,25 @@ class TestHumanLoopCallback(IsolatedAsyncioTestCase):
         callback = MockCallbackImplementation()
         provider_mock = MagicMock()
         provider_mock.name = "TestProvider"
-        
+
         result = HumanLoopResult(
             conversation_id="test-conversation",
             request_id="test-request",
             loop_type=HumanLoopType.APPROVAL,
-            status=HumanLoopStatus.APPROVED
+            status=HumanLoopStatus.APPROVED,
         )
-        
+
         # 测试更新回调
         await callback.on_humanloop_update(provider_mock, result)
         self.assertTrue(callback.update_called)
         self.assertEqual(callback.last_provider, provider_mock)
         self.assertEqual(callback.last_result, result)
-        
+
         # 测试超时回调
         await callback.on_humanloop_timeout(provider_mock)
         self.assertTrue(callback.timeout_called)
         self.assertEqual(callback.last_provider, provider_mock)
-        
+
         # 测试错误回调
         error = Exception("Test error")
         await callback.on_humanloop_error(provider_mock, error)
@@ -235,7 +235,7 @@ class TestHumanLoopCallback(IsolatedAsyncioTestCase):
 # 创建一个模拟的 HumanLoopProvider 实现
 class MockHumanLoopProvider:
     """模拟的 HumanLoopProvider 实现"""
-    
+
     def __init__(self, name="MockProvider"):
         self.name = name
         self.request_humanloop_mock = AsyncMock()
@@ -244,7 +244,7 @@ class MockHumanLoopProvider:
         self.cancel_request_mock = AsyncMock()
         self.cancel_conversation_mock = AsyncMock()
         self.continue_humanloop_mock = AsyncMock()
-    
+
     async def request_humanloop(
         self,
         task_id: str,
@@ -252,38 +252,26 @@ class MockHumanLoopProvider:
         loop_type: HumanLoopType,
         context: Dict[str, Any],
         metadata: Optional[Dict[str, Any]] = None,
-        timeout: Optional[int] = None
+        timeout: Optional[int] = None,
     ) -> HumanLoopResult:
         return await self.request_humanloop_mock(
             task_id, conversation_id, loop_type, context, metadata, timeout
         )
-    
+
     async def check_request_status(
-        self,
-        conversation_id: str,
-        request_id: str
+        self, conversation_id: str, request_id: str
     ) -> HumanLoopResult:
         return await self.check_request_status_mock(conversation_id, request_id)
-    
-    async def check_conversation_status(
-        self,
-        conversation_id: str
-    ) -> HumanLoopResult:
+
+    async def check_conversation_status(self, conversation_id: str) -> HumanLoopResult:
         return await self.check_conversation_status_mock(conversation_id)
-    
-    async def cancel_request(
-        self,
-        conversation_id: str,
-        request_id: str
-    ) -> bool:
+
+    async def cancel_request(self, conversation_id: str, request_id: str) -> bool:
         return await self.cancel_request_mock(conversation_id, request_id)
-    
-    async def cancel_conversation(
-        self,
-        conversation_id: str
-    ) -> bool:
+
+    async def cancel_conversation(self, conversation_id: str) -> bool:
         return await self.cancel_conversation_mock(conversation_id)
-    
+
     async def continue_humanloop(
         self,
         conversation_id: str,
@@ -302,7 +290,7 @@ class TestHumanLoopProvider(IsolatedAsyncioTestCase):
     def test_provider_protocol_compliance(self):
         """测试提供者是否符合协议要求"""
         provider = MockHumanLoopProvider()
-        
+
         # 验证是否实现了所有必需的属性和方法
         self.assertTrue(hasattr(provider, "name"))
         self.assertTrue(hasattr(provider, "request_humanloop"))
@@ -311,7 +299,7 @@ class TestHumanLoopProvider(IsolatedAsyncioTestCase):
         self.assertTrue(hasattr(provider, "cancel_request"))
         self.assertTrue(hasattr(provider, "cancel_conversation"))
         self.assertTrue(hasattr(provider, "continue_humanloop"))
-        
+
         # 验证是否符合 HumanLoopProvider 协议
         # 注意：由于 Protocol 是运行时检查，我们需要确保实现了所有必需的方法
         self.assertTrue(isinstance(provider, HumanLoopProvider))
@@ -320,56 +308,63 @@ class TestHumanLoopProvider(IsolatedAsyncioTestCase):
     async def test_provider_methods(self):
         """测试提供者方法"""
         provider = MockHumanLoopProvider()
-        
+
         # 设置模拟返回值
         result = HumanLoopResult(
             conversation_id="test-conversation",
             request_id="test-request",
             loop_type=HumanLoopType.APPROVAL,
-            status=HumanLoopStatus.PENDING
+            status=HumanLoopStatus.PENDING,
         )
-        
+
         provider.request_humanloop_mock.return_value = result
         provider.check_request_status_mock.return_value = result
         provider.check_conversation_status_mock.return_value = result
         provider.cancel_request_mock.return_value = True
         provider.cancel_conversation_mock.return_value = True
         provider.continue_humanloop_mock.return_value = result
-        
+
         # 测试 request_humanloop 方法
         response = await provider.request_humanloop(
             "test-task",
             "test-conversation",
             HumanLoopType.APPROVAL,
-            {"message": "Please approve"}
+            {"message": "Please approve"},
         )
         self.assertEqual(response, result)
         provider.request_humanloop_mock.assert_called_once()
-        
+
         # 测试 check_request_status 方法
-        response = await provider.check_request_status("test-conversation", "test-request")
+        response = await provider.check_request_status(
+            "test-conversation", "test-request"
+        )
         self.assertEqual(response, result)
-        provider.check_request_status_mock.assert_called_once_with("test-conversation", "test-request")
-        
+        provider.check_request_status_mock.assert_called_once_with(
+            "test-conversation", "test-request"
+        )
+
         # 测试 check_conversation_status 方法
         response = await provider.check_conversation_status("test-conversation")
         self.assertEqual(response, result)
-        provider.check_conversation_status_mock.assert_called_once_with("test-conversation")
-        
+        provider.check_conversation_status_mock.assert_called_once_with(
+            "test-conversation"
+        )
+
         # 测试 cancel_request 方法
         response = await provider.cancel_request("test-conversation", "test-request")
         self.assertTrue(response)
-        provider.cancel_request_mock.assert_called_once_with("test-conversation", "test-request")
-        
+        provider.cancel_request_mock.assert_called_once_with(
+            "test-conversation", "test-request"
+        )
+
         # 测试 cancel_conversation 方法
         response = await provider.cancel_conversation("test-conversation")
         self.assertTrue(response)
         provider.cancel_conversation_mock.assert_called_once_with("test-conversation")
-        
+
         # 测试 continue_humanloop 方法
         response = await provider.continue_humanloop(
-            "test-conversation",
-            {"message": "Additional information"}
+            "test-conversation", {"message": "Additional information"}
         )
         self.assertEqual(response, result)
         provider.continue_humanloop_mock.assert_called_once()

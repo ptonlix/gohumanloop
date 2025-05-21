@@ -1,5 +1,5 @@
 """
-## 适配器模块测试 (adapters) 
+## 适配器模块测试 (adapters)
 
 tests/unit/adapters/test_langgraph_adapter.py
 - 测试 LangGraphAdapter 类的初始化
