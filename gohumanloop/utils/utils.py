@@ -1,14 +1,13 @@
 import asyncio
 import os
-from typing import Optional, Union
+from typing import Awaitable, Any, Optional, Union
 from pydantic import SecretStr
-import warnings
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-def run_async_safely(coro):
+def run_async_safely(coro: Awaitable[Any])-> Any:
     """
     Safely run async coroutines in synchronous environment
     Will raise RuntimeError if called in async environment

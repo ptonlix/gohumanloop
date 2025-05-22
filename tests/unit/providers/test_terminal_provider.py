@@ -1,12 +1,10 @@
-import asyncio
 import unittest
-import json
 from unittest import IsolatedAsyncioTestCase, TestCase
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import patch, AsyncMock
 from datetime import datetime
 
 from gohumanloop.providers.terminal_provider import TerminalProvider
-from gohumanloop.core.interface import HumanLoopStatus, HumanLoopType, HumanLoopResult
+from gohumanloop.core.interface import HumanLoopStatus, HumanLoopType
 
 
 class TestTerminalProviderInit(TestCase):

@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional, Callable, Awaitable, TypeVar, Union, List
+from typing import Dict, Any, Optional, Callable, Awaitable, TypeVar, Union
 from functools import wraps
 import asyncio
 import uuid
@@ -16,6 +16,8 @@ from gohumanloop.core.interface import (
     HumanLoopCallback,
     HumanLoopProvider,
 )
+from gohumanloop.core.manager import DefaultHumanLoopManager
+from gohumanloop.providers.terminal_provider import TerminalProvider
 
 logger = logging.getLogger(__name__)
 
@@ -774,9 +776,6 @@ def default_langgraph_callback_factory(state: Any) -> LangGraphHumanLoopCallback
         async_on_error=async_on_error,
     )
 
-
-from gohumanloop.core.manager import DefaultHumanLoopManager
-from gohumanloop.providers.terminal_provider import TerminalProvider
 
 # Create HumanLoopManager instance
 manager = DefaultHumanLoopManager(

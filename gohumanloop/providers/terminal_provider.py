@@ -39,7 +39,7 @@ class TerminalProvider(BaseProvider):
     def __str__(self) -> str:
         base_str = super().__str__()
         terminal_info = (
-            f"- Terminal Provider: Terminal-based human-in-the-loop implementation\n"
+            "- Terminal Provider: Terminal-based human-in-the-loop implementation\n"
         )
         return f"{terminal_info}{base_str}"
 

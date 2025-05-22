@@ -1,6 +1,5 @@
 import os
 from typing import Dict, Any, Optional
-from pydantic import BaseModel, Field, field_validator, SecretStr
 
 from gohumanloop.models.glh_model import GoHumanLoopConfig
 from gohumanloop.providers.api_provider import APIProvider
@@ -61,6 +60,6 @@ class GoHumanLoopProvider(APIProvider):
         """Returns a string description of this instance"""
         base_str = super().__str__()
         ghl_info = (
-            f"- GoHumanLoop Provider: Connected to GoHumanLoop Official Platform\n"
+            "- GoHumanLoop Provider: Connected to GoHumanLoop Official Platform\n"
         )
         return f"{ghl_info}{base_str}"

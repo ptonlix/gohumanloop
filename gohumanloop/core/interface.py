@@ -5,10 +5,7 @@ from typing import (
     Optional,
     Protocol,
     runtime_checkable,
-    List,
     Union,
-    Callable,
-    Awaitable,
 )
 from enum import Enum
 from dataclasses import dataclass, field
@@ -298,7 +295,7 @@ class HumanLoopCallback(ABC):
     @abstractmethod
     async def async_on_humanloop_update(
         self, provider: HumanLoopProvider, result: HumanLoopResult
-    ):
+    )-> None:
         """当请求更新时的回调
 
         Args:
@@ -311,7 +308,7 @@ class HumanLoopCallback(ABC):
     async def async_on_humanloop_timeout(
         self,
         provider: HumanLoopProvider,
-    ):
+    )-> None:
         """当请求超时时的回调
 
         Args:
@@ -322,7 +319,7 @@ class HumanLoopCallback(ABC):
     @abstractmethod
     async def async_on_humanloop_error(
         self, provider: HumanLoopProvider, error: Exception
-    ):
+    )-> None:
         """当请求发生错误时的回调
 
         Args:
@@ -690,13 +687,14 @@ class HumanLoopManager(ABC):
         self,
         task_id: str,
         conversation_id: str,
-    ) -> HumanLoopResult:
-        """检查对话状态
+    ) -> bool:
+        """检查对话是否存在
 
         Args:
-            conversation_id: 对话标识符
+            task_id: 任务标识符，用于标识业务任务
+            conversation_id: 对话标识符，用于标识具体对话会话
         Returns:
-            HumanLoopResult: 包含对话最新请求的状态
+            bool: 如果对话存在返回True，否则返回False
         """
         pass
 
@@ -705,22 +703,22 @@ class HumanLoopManager(ABC):
         self,
         task_id: str,
         conversation_id: str,
-    ) -> HumanLoopResult:
+    ) -> bool:
         """检查对话状态（同步版本）
 
         Args:
             conversation_id: 对话标识符
         Returns:
-            HumanLoopResult: 包含对话最新请求的状态
+            bool: 如果对话存在返回True，否则返回False
         """
         pass
 
     @abstractmethod
-    async def async_shutdown(self):
+    async def async_shutdown(self) -> None:
         """关闭管理器(异步方法)"""
         pass
 
     @abstractmethod
-    def shutdown(self):
+    def shutdown(self) -> None:
         """关闭管理器(同步方法)"""
         pass

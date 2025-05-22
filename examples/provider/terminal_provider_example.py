@@ -64,7 +64,7 @@ async def run_approval_example(provider):
         print(f"响应内容: {json.dumps(status.response, ensure_ascii=False)}")
 
     # 获取所有对话记录
-    conversation_history = provider.async_get_conversation_history("conv_456")
+    conversation_history = await provider.async_get_conversation_history("conv_456")
     print("\n完整对话记录:")
     for entry in conversation_history:
         print(f"时间: {entry['responded_at']}")
@@ -105,7 +105,7 @@ async def run_conversation_example(provider):
             )
 
     # 获取所有对话记录
-    conversation_history = provider.async_get_conversation_history("conv_789")
+    conversation_history = await provider.async_get_conversation_history("conv_789")
     print("\n完整对话记录:")
     for entry in conversation_history:
         print(f"时间: {entry['responded_at']}")

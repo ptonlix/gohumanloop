@@ -1,12 +1,8 @@
-import os
 import unittest
-from unittest import IsolatedAsyncioTestCase
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import patch
 
-from pydantic import SecretStr
 
 from gohumanloop.providers.ghl_provider import GoHumanLoopProvider
-from gohumanloop.core.interface import HumanLoopStatus, HumanLoopType
 
 
 class TestGoHumanLoopProviderInit(unittest.TestCase):
@@ -97,8 +93,6 @@ class TestGoHumanLoopEnvironmentConfig(unittest.TestCase):
     )
     def test_env_vars_priority(self):
         """测试环境变量优先级"""
-        # 创建一个 API 密钥对象
-        api_key = SecretStr("direct-api-key")
 
         # 初始化提供者，但不传递 API 基础 URL
         provider = GoHumanLoopProvider(name="test_provider")

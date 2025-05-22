@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, Optional, List
 import os
 import asyncio
 import aiohttp
@@ -11,7 +11,6 @@ from gohumanloop.providers.ghl_provider import GoHumanLoopProvider
 from gohumanloop.core.interface import (
     HumanLoopProvider,
     HumanLoopStatus,
-    HumanLoopType,
     HumanLoopResult,
 )
 from gohumanloop.utils import get_secret_from_env
@@ -393,7 +392,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
                             return
                         # 处理 401 错误
                         elif response.status == 401:
-                            print(f"同步任务数据失败: 认证失败 - 请检查 API 密钥")
+                            print("同步任务数据失败: 认证失败 - 请检查 API 密钥")
                             return
 
                         # 处理其他错误状态码

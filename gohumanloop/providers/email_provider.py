@@ -9,7 +9,7 @@ from email.header import decode_header
 from email import message_from_bytes
 from email.message import Message
 import logging
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, Tuple
 from datetime import datetime
 from pydantic import SecretStr
 from concurrent.futures import ThreadPoolExecutor
@@ -64,13 +64,13 @@ class EmailProvider(BaseProvider):
         self.username = username or os.environ.get("GOHUMANLOOP_EMAIL_USERNAME")
         if not self.username:
             raise ValueError(
-                f"Email username not provided, please set it via parameter or environment variable GOHUMANLOOP_EMAIL_USERNAME"
+                "Email username not provided, please set it via parameter or environment variable GOHUMANLOOP_EMAIL_USERNAME"
             )
 
         self.password = password or get_secret_from_env("GOHUMANLOOP_EMAIL_PASSWORD")
         if not self.password:
             raise ValueError(
-                f"Email password not provided, please set it via parameter or environment variable GOHUMANLOOP_EMAIL_PASSWORD"
+                "Email password not provided, please set it via parameter or environment variable GOHUMANLOOP_EMAIL_PASSWORD"
             )
 
         self.sender_email = sender_email or self.username
@@ -303,7 +303,7 @@ class EmailProvider(BaseProvider):
             messages = client.search("UNSEEN")
 
             if not messages:
-                logger.warning(f"No unread emails found")
+                logger.warning("No unread emails found")
                 return None
 
             # 获取邮件内容

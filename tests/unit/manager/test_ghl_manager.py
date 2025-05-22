@@ -1,22 +1,16 @@
 import unittest
 import pytest
-import asyncio
-import time
 import os
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 from unittest import IsolatedAsyncioTestCase
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, Optional
 
 from gohumanloop.core.interface import (
     HumanLoopType,
     HumanLoopStatus,
     HumanLoopResult,
-    HumanLoopCallback,
-    HumanLoopProvider,
 )
 from gohumanloop.manager.ghl_manager import GoHumanLoopManager
-from gohumanloop.providers.ghl_provider import GoHumanLoopProvider
-from gohumanloop.models.glh_model import GoHumanLoopConfig
 
 
 class MockHumanLoopProvider:
@@ -81,16 +75,16 @@ class MockCallbackImplementation:
         self.last_provider = None
         self.last_error = None
 
-    async def on_humanloop_update(self, provider, result):
+    async def async_on_humanloop_update(self, provider, result):
         self.update_called = True
         self.last_provider = provider
         self.last_result = result
 
-    async def on_humanloop_timeout(self, provider):
+    async def async_on_humanloop_timeout(self, provider):
         self.timeout_called = True
         self.last_provider = provider
 
-    async def on_humanloop_error(self, provider, error):
+    async def async_on_humanloop_error(self, provider, error):
         self.error_called = True
         self.last_provider = provider
         self.last_error = error

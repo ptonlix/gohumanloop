@@ -1,6 +1,6 @@
 import unittest
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from unittest import IsolatedAsyncioTestCase
 from datetime import datetime
 from typing import Dict, Any, Optional
@@ -181,16 +181,16 @@ class MockCallbackImplementation(HumanLoopCallback):
         self.last_provider = None
         self.last_error = None
 
-    async def on_humanloop_update(self, provider, result):
+    async def async_on_humanloop_update(self, provider, result):
         self.update_called = True
         self.last_provider = provider
         self.last_result = result
 
-    async def on_humanloop_timeout(self, provider):
+    async def async_on_humanloop_timeout(self, provider):
         self.timeout_called = True
         self.last_provider = provider
 
-    async def on_humanloop_error(self, provider, error):
+    async def async_on_humanloop_error(self, provider, error):
         self.error_called = True
         self.last_provider = provider
         self.last_error = error
@@ -214,19 +214,19 @@ class TestHumanLoopCallback(IsolatedAsyncioTestCase):
         )
 
         # 测试更新回调
-        await callback.on_humanloop_update(provider_mock, result)
+        await callback.async_on_humanloop_update(provider_mock, result)
         self.assertTrue(callback.update_called)
         self.assertEqual(callback.last_provider, provider_mock)
         self.assertEqual(callback.last_result, result)
 
         # 测试超时回调
-        await callback.on_humanloop_timeout(provider_mock)
+        await callback.async_on_humanloop_timeout(provider_mock)
         self.assertTrue(callback.timeout_called)
         self.assertEqual(callback.last_provider, provider_mock)
 
         # 测试错误回调
         error = Exception("Test error")
-        await callback.on_humanloop_error(provider_mock, error)
+        await callback.async_on_humanloop_error(provider_mock, error)
         self.assertTrue(callback.error_called)
         self.assertEqual(callback.last_provider, provider_mock)
         self.assertEqual(callback.last_error, error)

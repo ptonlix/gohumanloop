@@ -1,14 +1,8 @@
-import asyncio
 import unittest
-from unittest import IsolatedAsyncioTestCase
-from unittest.mock import MagicMock, patch, AsyncMock
-import pytest
 
 from pydantic import SecretStr
 
 from gohumanloop.providers.api_provider import APIProvider
-from gohumanloop.core.interface import HumanLoopStatus, HumanLoopType, HumanLoopResult
-from gohumanloop.models.api_model import APIResponse
 
 
 class TestAPIProviderInit(unittest.TestCase):

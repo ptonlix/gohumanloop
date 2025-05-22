@@ -1,17 +1,14 @@
 import unittest
 import pytest
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 from unittest import IsolatedAsyncioTestCase
-from typing import Dict, Any, Optional, List, Union, Set
+from typing import Dict, Any, Optional
 
 from gohumanloop.core.interface import (
     HumanLoopType,
     HumanLoopStatus,
     HumanLoopResult,
     HumanLoopCallback,
-    HumanLoopProvider,
-    HumanLoopRequest,
 )
 from gohumanloop.core.manager import DefaultHumanLoopManager
 
@@ -78,16 +75,16 @@ class MockCallbackImplementation(HumanLoopCallback):
         self.last_provider = None
         self.last_error = None
 
-    async def on_humanloop_update(self, provider, result):
+    async def async_on_humanloop_update(self, provider, result):
         self.update_called = True
         self.last_provider = provider
         self.last_result = result
 
-    async def on_humanloop_timeout(self, provider):
+    async def async_on_humanloop_timeout(self, provider):
         self.timeout_called = True
         self.last_provider = provider
 
-    async def on_humanloop_error(self, provider, error):
+    async def async_on_humanloop_error(self, provider, error):
         self.error_called = True
         self.last_provider = provider
         self.last_error = error
@@ -504,11 +501,6 @@ class TestDefaultHumanLoopManager(IsolatedAsyncioTestCase):
             status=HumanLoopStatus.APPROVED,
         )
         self.provider.check_request_status_mock.return_value = updated_result
-
-        # 检查状态并触发回调
-        result = await self.manager.check_request_status(
-            conversation_id="test-conversation", request_id="test-request"
-        )
 
         # 验证回调是否被调用
         self.assertTrue(self.callback.update_called)

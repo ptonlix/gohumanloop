@@ -1,11 +1,9 @@
 from unittest import IsolatedAsyncioTestCase, TestCase
-from unittest.mock import MagicMock, patch, AsyncMock, call
+from unittest.mock import MagicMock, patch
 
 from pydantic import SecretStr
-from email.message import Message
 
 from gohumanloop.providers.email_provider import EmailProvider
-from gohumanloop.core.interface import HumanLoopStatus, HumanLoopType, HumanLoopResult
 
 
 class TestEmailProviderInit(TestCase):

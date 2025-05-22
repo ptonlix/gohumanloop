@@ -10,7 +10,7 @@ check-py: ## Run code quality tools.
 	uv run deptry .
 
 .PHONY: check
-check: check-py 
+check: check-py
 
 typecheck: ## just the typechecks
 	: 🚀 Static type checking: Running mypy
@@ -39,10 +39,6 @@ publish-py: ## publish a release to pypi. with UV_PUBLISH_TOKEN
 
 .PHONY: publish
 publish: publish-py
-
-.PHONY: publish-ts
-publish-ts: build-ts
-	npm -C humanlayer-ts publish
 
 .PHONY: build-and-publish
 build-and-publish: build publish ## Build and publish.

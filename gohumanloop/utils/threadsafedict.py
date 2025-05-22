@@ -29,18 +29,18 @@ class ThreadSafeDict(Generic[K, V]):
     - 使用全局锁 self._global_lock 保护键级别锁的创建和删除
     """
 
-    def __init__(self):
-        self._dict = {}
+    def __init__(self)-> None:
+        self._dict: dict[Any, Any] = {}
         # 使用 threading.RLock 支持同步操作的线程安全
         self._sync_lock = threading.RLock()
         # 使用 asyncio.Lock 支持异步操作的线程安全
         self._async_lock = asyncio.Lock()
         # 键级别锁字典
-        self._key_locks = {}
+        self._key_locks: dict[Any, asyncio.Lock] = {}
         # 键级别锁的全局锁
         self._global_lock = asyncio.Lock()
 
-    async def _get_key_lock(self, key):
+    async def _get_key_lock(self, key: K)-> asyncio.Lock:
         """获取指定键的锁，如果不存在则创建"""
         async with self._global_lock:
             if key not in self._key_locks:
@@ -48,7 +48,7 @@ class ThreadSafeDict(Generic[K, V]):
             return self._key_locks[key]
 
     # 同步方法 - 使用 threading.RLock 保证线程安全
-    def __getitem__(self, key: K) -> V:
+    def __getitem__(self, key: K) -> Any:
         """获取值 - 同步方法，用于 dict[key] 语法"""
         with self._sync_lock:
             return self._dict[key]
@@ -68,7 +68,7 @@ class ThreadSafeDict(Generic[K, V]):
         with self._sync_lock:
             return key in self._dict
 
-    def get(self, key: K, default: Optional[V] = None) -> Optional[V]:
+    def get(self, key: K, default: Optional[V] = None) -> Any:
         """获取值，如果不存在则返回默认值 - 同步方法"""
         with self._sync_lock:
             return self._dict.get(key, default)
@@ -78,17 +78,17 @@ class ThreadSafeDict(Generic[K, V]):
         with self._sync_lock:
             return len(self._dict)
 
-    def keys(self):
+    def keys(self)-> list:
         """获取所有键 - 同步方法"""
         with self._sync_lock:
             return list(self._dict.keys())
 
-    def values(self):
+    def values(self)-> list:
         """获取所有值 - 同步方法"""
         with self._sync_lock:
             return list(self._dict.values())
 
-    def items(self):
+    def items(self)-> list:
         """获取所有键值对 - 同步方法"""
         with self._sync_lock:
             return list(self._dict.items())
@@ -110,7 +110,7 @@ class ThreadSafeDict(Generic[K, V]):
             return False
 
     # 异步方法 - 使用 asyncio.Lock 保证线程安全
-    async def aget(self, key: K, default: Optional[V] = None) -> Optional[V]:
+    async def aget(self, key: K, default: Optional[V] = None) -> Any:
         """安全地获取值 - 异步方法"""
         async with self._async_lock:
             return self._dict.get(key, default)
@@ -166,17 +166,17 @@ class ThreadSafeDict(Generic[K, V]):
         async with self._async_lock:
             return len(self._dict)
 
-    async def akeys(self):
+    async def akeys(self)-> list:
         """安全地获取所有键 - 异步方法"""
         async with self._async_lock:
             return list(self._dict.keys())
 
-    async def avalues(self):
+    async def avalues(self)-> list:
         """安全地获取所有值 - 异步方法"""
         async with self._async_lock:
             return list(self._dict.values())
 
-    async def aitems(self):
+    async def aitems(self)-> list:
         """安全地获取所有键值对 - 异步方法"""
         async with self._async_lock:
             return list(self._dict.items())
@@ -184,9 +184,9 @@ class ThreadSafeDict(Generic[K, V]):
 
 if __name__ == "__main__":
     # 测试同步方法
-    def test_sync_methods():
+    def test_sync_methods()-> None:
         print("\n=== 测试同步方法 ===")
-        sync_dict = ThreadSafeDict()
+        sync_dict: ThreadSafeDict = ThreadSafeDict()
 
         # 测试基本的增删改查操作
         sync_dict["key1"] = "value1"
@@ -216,9 +216,9 @@ if __name__ == "__main__":
         print("删除后检查:", "key1" in sync_dict)  # False
 
     # 测试异步方法
-    async def test_async_methods():
+    async def test_async_methods()-> None:
         print("\n=== 测试异步方法 ===")
-        async_dict = ThreadSafeDict()
+        async_dict:ThreadSafeDict = ThreadSafeDict()
 
         # 测试基本的异步增删改查
         await async_dict.aset("key1", "value1")

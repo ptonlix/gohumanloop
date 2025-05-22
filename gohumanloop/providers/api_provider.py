@@ -370,7 +370,7 @@ class APIProvider(BaseProvider):
         # Get platform information
         platform = request_info.get("metadata", {}).get("platform")
         if not platform:
-            logger.error(f"Cancel request failed: Platform information not found")
+            logger.error("Cancel request failed: Platform information not found")
             return False
 
         try:
@@ -431,7 +431,7 @@ class APIProvider(BaseProvider):
 
         platform = first_request.get("metadata", {}).get("platform")
         if not platform:
-            logger.error(f"Cancel conversation failed: Platform information not found")
+            logger.error("Cancel conversation failed: Platform information not found")
             return False
 
         try:

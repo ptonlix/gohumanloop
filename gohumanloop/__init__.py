@@ -19,7 +19,7 @@ from gohumanloop.utils import run_async_safely, get_secret_from_env
 
 # Conditionally import EmailProvider
 try:
-    from gohumanloop.providers.email_provider import EmailProvider
+    from gohumanloop.providers.email_provider import EmailProvider  # noqa: F401
 
     _has_email = True
 except ImportError:

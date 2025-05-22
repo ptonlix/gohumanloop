@@ -1,6 +1,5 @@
 import asyncio
 import uuid
-import unittest
 from unittest import IsolatedAsyncioTestCase, TestCase
 from unittest.mock import MagicMock
 
