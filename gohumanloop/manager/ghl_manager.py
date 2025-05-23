@@ -1,4 +1,5 @@
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Type
+from types import TracebackType
 import os
 import asyncio
 import aiohttp
@@ -54,6 +55,9 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
         # Get API key from environment variables (if not provided)
         api_key = get_secret_from_env("GOHUMANLOOP_API_KEY")
 
+        if api_key is None:
+            raise ValueError("GOHUMANLOOP_API_KEY environment variable is not set!")
+
         # Get API base URL from environment variables (if not provided)
         api_base_url = os.environ.get(
             "GOHUMANLOOP_API_BASE_URL", "https://www.gohumanloop.com"
@@ -73,7 +77,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
         )
 
         # 初始化提供者列表
-        providers = [ghl_provider]
+        providers: List[HumanLoopProvider] = [ghl_provider]
         if additional_providers:
             providers.extend(additional_providers)
 
@@ -90,13 +94,15 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
         self.sync_interval = sync_interval
 
         # 存储已取消的请求和对话信息
-        self._cancelled_conversations = {}  # conversation_id -> 取消信息
+        self._cancelled_conversations: Dict[
+            str, Dict[str, Any]
+        ] = {}  # conversation_id -> 取消信息
 
-        # 同步任务引用
-        self._sync_task = None
+        # 数据同步任务引用
+        self._sync_task: asyncio.Task[None] | None = None
 
         # 同步模式相关属性
-        self._sync_thread = None
+        self._sync_thread: threading.Thread | None = None
         self._sync_thread_stop_event = threading.Event()
 
         # 启动数据同步任务
@@ -115,14 +121,16 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
             GoHumanLoopProvider: GoHumanLoop 提供者实例
         """
         provider = await self.async_get_provider(self.default_provider_id)
+        # 添加类型转换确保返回正确类型
+        assert isinstance(provider, GoHumanLoopProvider)
         return provider
 
-    async def async_start_sync_task(self):
+    async def async_start_sync_task(self) -> None:
         """启动数据同步任务"""
         if self._sync_task is None or self._sync_task.done():
             self._sync_task = asyncio.create_task(self._async_data_periodically())
 
-    async def _async_data_periodically(self):
+    async def _async_data_periodically(self) -> None:
         """定期同步数据到 GoHumanLoop 平台"""
         while True:
             try:
@@ -139,7 +147,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
                     print(f"最终数据同步错误: {str(e)}")
                 raise  # 重新抛出取消异常
 
-    def start_sync_task(self):
+    def start_sync_task(self) -> None:
         """启动同步版本的数据同步任务"""
         if self._sync_thread is None or not self._sync_thread.is_alive():
             self._sync_thread_stop_event.clear()
@@ -148,7 +156,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
             )
             self._sync_thread.start()
 
-    def _sync_data_periodically(self):
+    def _sync_data_periodically(self) -> None:
         """同步版本：定期同步数据到 GoHumanLoop 平台"""
         while not self._sync_thread_stop_event.is_set():
             try:
@@ -165,7 +173,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
         except Exception as e:
             print(f"最终同步数据同步错误: {str(e)}")
 
-    async def async_data_to_platform(self):
+    async def async_data_to_platform(self) -> None:
         """
         同步数据到 GoHumanLoop 平台
 
@@ -182,7 +190,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
             conversations = await self.async_get_task_conversations(task_id)
 
             # 收集任务数据
-            task_data = {
+            task_data: Dict[str, Any] = {
                 "task_id": task_id,
                 "conversations": [],
                 "timestamp": datetime.now().isoformat(),
@@ -195,7 +203,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
                     conversation_id
                 )
 
-                conversation_data = {
+                conversation_data: Dict[str, Any] = {
                     "conversation_id": conversation_id,
                     "provider_id": self._conversation_provider.get(conversation_id),
                     "requests": [],
@@ -228,7 +236,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
             for conv_id, cancel_info in self._cancelled_conversations.items():
                 if conv_id not in conversations:
                     # 创建已取消对话的数据
-                    cancelled_conv_data = {
+                    cancelled_conv_data: Dict[str, Any] = {
                         "conversation_id": conv_id,
                         "provider_id": cancel_info.get("provider_id"),
                         "requests": [],
@@ -263,7 +271,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
         # 更新最后同步时间
         self._last_sync_time = current_time
 
-    def sync_data_to_platform(self):
+    def sync_data_to_platform(self) -> None:
         """
         同步版本：同步数据到 GoHumanLoop 平台
 
@@ -282,7 +290,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
             conversations = self.get_task_conversations(task_id)
 
             # 收集任务数据
-            task_data = {
+            task_data: Dict[str, Any] = {
                 "task_id": task_id,
                 "conversations": [],
                 "timestamp": datetime.now().isoformat(),
@@ -293,7 +301,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
                 # 获取对话中的所有请求
                 request_ids = self.get_conversation_requests(conversation_id)
 
-                conversation_data = {
+                conversation_data: Dict[str, Any] = {
                     "conversation_id": conversation_id,
                     "provider_id": self._conversation_provider.get(conversation_id),
                     "requests": [],
@@ -326,7 +334,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
             for conv_id, cancel_info in self._cancelled_conversations.items():
                 if conv_id not in conversations:
                     # 创建已取消对话的数据
-                    cancelled_conv_data = {
+                    cancelled_conv_data: Dict[str, Any] = {
                         "conversation_id": conv_id,
                         "provider_id": cancel_info.get("provider_id"),
                         "requests": [],
@@ -364,7 +372,9 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
         # 更新最后同步时间
         self._last_sync_time = current_time
 
-    async def _async_send_task_data_to_platform(self, task_data: Dict[str, Any]):
+    async def _async_send_task_data_to_platform(
+        self, task_data: Dict[str, Any]
+    ) -> None:
         """发送任务数据到 GoHumanLoop 平台"""
         try:
             # 构建 API 请求 URL
@@ -490,7 +500,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
 
         return result
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         """
         关闭管理器并确保数据同步（同步版本）
 
@@ -508,7 +518,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
         except Exception as e:
             print(f"最终同步数据同步失败: {str(e)}")
 
-    async def async_shutdown(self):
+    async def async_shutdown(self) -> None:
         """
         关闭管理器并确保数据同步（异步版本）
 
@@ -528,21 +538,33 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
         except Exception as e:
             print(f"最终异步数据同步失败: {str(e)}")
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "GoHumanLoopManager":
         """实现异步上下文管理器协议的进入方法"""
         await self.async_start_sync_task()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> Optional[bool]:
         """实现异步上下文管理器协议的退出方法"""
         await self.async_shutdown()
+        return None
 
-    def __enter__(self):
+    def __enter__(self) -> "GoHumanLoopManager":
         """实现同步上下文管理器协议的进入方法"""
         # 使用同步模式
         self.start_sync_task()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> Optional[bool]:
         """实现同步上下文管理器协议的退出方法"""
         self.shutdown()
+        return None

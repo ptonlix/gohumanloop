@@ -7,7 +7,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def run_async_safely(coro: Awaitable[Any])-> Any:
+def run_async_safely(coro: Awaitable[Any]) -> Any:
     """
     Safely run async coroutines in synchronous environment
     Will raise RuntimeError if called in async environment

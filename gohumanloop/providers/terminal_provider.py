@@ -1,6 +1,6 @@
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, Any, Optional
+from concurrent.futures import ThreadPoolExecutor, Future
+from typing import Dict, Any, Optional, Tuple
 from datetime import datetime
 
 from gohumanloop.core.interface import HumanLoopResult, HumanLoopStatus, HumanLoopType
@@ -24,11 +24,11 @@ class TerminalProvider(BaseProvider):
         super().__init__(name, config)
 
         # Store running terminal input tasks
-        self._terminal_input_tasks = {}
+        self._terminal_input_tasks: Dict[Tuple[str, str], Future] = {}
         # Create thread pool for background service execution
         self._executor = ThreadPoolExecutor(max_workers=10)
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Destructor to ensure thread pool is properly closed"""
         self._executor.shutdown(wait=False)
 
@@ -99,7 +99,9 @@ class TerminalProvider(BaseProvider):
 
         return result
 
-    def _run_async_terminal_interaction(self, conversation_id: str, request_id: str):
+    def _run_async_terminal_interaction(
+        self, conversation_id: str, request_id: str
+    ) -> None:
         """Run asynchronous terminal interaction in a separate thread"""
         # Create new event loop
         loop = asyncio.new_event_loop()
@@ -222,7 +224,7 @@ class TerminalProvider(BaseProvider):
 
     async def _process_terminal_interaction(
         self, conversation_id: str, request_id: str
-    ):
+    ) -> None:
         request_info = self._get_request(conversation_id, request_id)
         if not request_info:
             return
@@ -258,7 +260,7 @@ class TerminalProvider(BaseProvider):
 
     async def _async_handle_approval_interaction(
         self, conversation_id: str, request_id: str, request_info: Dict[str, Any]
-    ):
+    ) -> None:
         """Handle approval type interaction
 
         Args:
@@ -299,7 +301,7 @@ class TerminalProvider(BaseProvider):
 
     async def _async_handle_information_interaction(
         self, conversation_id: str, request_id: str, request_info: Dict[str, Any]
-    ):
+    ) -> None:
         """Handle information collection type interaction
 
         Args:
@@ -323,7 +325,7 @@ class TerminalProvider(BaseProvider):
 
     async def _async_handle_conversation_interaction(
         self, conversation_id: str, request_id: str, request_info: Dict[str, Any]
-    ):
+    ) -> None:
         """Handle conversation type interaction
 
         Args:

@@ -30,13 +30,21 @@ class DefaultHumanLoopManager(HumanLoopManager):
         self._timeout_tasks: dict[tuple[str, str], asyncio.Task] = {}
 
         # 存储task_id与conversation_id的映射关系
-        self._task_conversations: dict[str, set[str]] = {}  # task_id -> Set[conversation_id]
+        self._task_conversations: dict[
+            str, set[str]
+        ] = {}  # task_id -> Set[conversation_id]
         # 存储conversation_id与request_id的映射关系
-        self._conversation_requests: dict[str, list[str]] = {}  # conversation_id -> List[request_id]
+        self._conversation_requests: dict[
+            str, list[str]
+        ] = {}  # conversation_id -> List[request_id]
         # 存储request_id与task_id的反向映射
-        self._request_task: dict[tuple[str, str], str] = {}  # (conversation_id, request_id) -> task_id
+        self._request_task: dict[
+            tuple[str, str], str
+        ] = {}  # (conversation_id, request_id) -> task_id
         # 存储对话对应的provider_id
-        self._conversation_provider: dict[str, str] = {}  # conversation_id -> provider_id
+        self._conversation_provider: dict[
+            str, str
+        ] = {}  # conversation_id -> provider_id
 
         # 初始化提供者
         if initial_providers:
@@ -354,7 +362,7 @@ class DefaultHumanLoopManager(HumanLoopManager):
     ) -> HumanLoopResult:
         """检查请求状态（同步版本）"""
 
-        result:HumanLoopResult =  run_async_safely(
+        result: HumanLoopResult = run_async_safely(
             self.async_check_request_status(
                 conversation_id=conversation_id,
                 request_id=request_id,
@@ -460,7 +468,6 @@ class DefaultHumanLoopManager(HumanLoopManager):
 
         return result
 
-
     async def async_cancel_conversation(
         self, conversation_id: str, provider_id: Optional[str] = None
     ) -> bool:
@@ -533,7 +540,7 @@ class DefaultHumanLoopManager(HumanLoopManager):
                 conversation_id=conversation_id, provider_id=provider_id
             )
         )
-        
+
         return result
 
     async def async_get_provider(
@@ -549,7 +556,9 @@ class DefaultHumanLoopManager(HumanLoopManager):
     def get_provider(self, provider_id: Optional[str] = None) -> HumanLoopProvider:
         """获取指定的提供者实例（同步版本）"""
 
-        result: HumanLoopProvider = run_async_safely(self.async_get_provider(provider_id=provider_id))
+        result: HumanLoopProvider = run_async_safely(
+            self.async_get_provider(provider_id=provider_id)
+        )
 
         return result
 
@@ -560,7 +569,9 @@ class DefaultHumanLoopManager(HumanLoopManager):
     def list_providers(self) -> Dict[str, HumanLoopProvider]:
         """列出所有注册的提供者（同步版本）"""
 
-        result: Dict[str, HumanLoopProvider] = run_async_safely(self.async_list_providers())
+        result: Dict[str, HumanLoopProvider] = run_async_safely(
+            self.async_list_providers()
+        )
 
         return result
 
@@ -588,10 +599,10 @@ class DefaultHumanLoopManager(HumanLoopManager):
         timeout: int,
         provider: HumanLoopProvider,
         callback: Optional[HumanLoopCallback],
-    )-> None:
+    ) -> None:
         """创建超时任务"""
 
-        async def timeout_task()-> None:
+        async def timeout_task() -> None:
             await asyncio.sleep(timeout)
             # 检查当前状态
             result = await self.async_check_request_status(
@@ -643,7 +654,7 @@ class DefaultHumanLoopManager(HumanLoopManager):
         request_id: str,
         provider: HumanLoopProvider,
         result: HumanLoopResult,
-    )-> None:
+    ) -> None:
         """触发状态更新回调"""
         callback: Optional[HumanLoopCallback] = self._callbacks.get(
             (conversation_id, request_id)
@@ -710,7 +721,7 @@ class DefaultHumanLoopManager(HumanLoopManager):
         Returns:
             List[str]: 与对话关联的请求ID列表
         """
-        ret: List[str] =  self._conversation_requests.get(conversation_id, [])
+        ret: List[str] = self._conversation_requests.get(conversation_id, [])
 
         return ret
 
@@ -730,7 +741,6 @@ class DefaultHumanLoopManager(HumanLoopManager):
 
         return ret
 
-
     async def async_get_conversation_provider(
         self, conversation_id: str
     ) -> Optional[str]:
@@ -742,7 +752,7 @@ class DefaultHumanLoopManager(HumanLoopManager):
         Returns:
             Optional[str]: 关联的提供者ID，如果不存在则返回None
         """
-        ret:Optional[str] = self._conversation_provider.get(conversation_id)
+        ret: Optional[str] = self._conversation_provider.get(conversation_id)
 
         return ret
 
@@ -802,8 +812,8 @@ class DefaultHumanLoopManager(HumanLoopManager):
 
         return False
 
-    async def async_shutdown(self)->None:
+    async def async_shutdown(self) -> None:
         pass
 
-    def shutdown(self)->None:
+    def shutdown(self) -> None:
         pass

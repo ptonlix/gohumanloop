@@ -26,8 +26,6 @@ class GoHumanLoopProvider(APIProvider):
 
         Args:
             name: Provider name
-            api_key: GoHumanLoop API key, if not provided will be fetched from environment variables
-            api_base_url: GoHumanLoop API base URL, if not provided will use default value
             default_platform: Default platform, e.g. "wechat", "feishu" etc.
             request_timeout: API request timeout in seconds
             poll_interval: Polling interval in seconds
@@ -36,6 +34,9 @@ class GoHumanLoopProvider(APIProvider):
         """
         # Get API key from environment variables (if not provided)
         api_key = get_secret_from_env("GOHUMANLOOP_API_KEY")
+
+        if api_key is None:
+            raise ValueError("GOHUMANLOOP_API_KEY environment variable is not set!")
 
         # Get API base URL from environment variables (if not provided)
         api_base_url = os.environ.get(

@@ -1,4 +1,18 @@
-from typing import Dict, Any, Optional, Callable, Awaitable, TypeVar, Union
+from typing import (
+    cast,
+    Dict,
+    Any,
+    Optional,
+    Callable,
+    Awaitable,
+    TypeVar,
+    Union,
+    Type,
+    AsyncIterator,
+    Iterator,
+    Coroutine,
+)
+from types import TracebackType
 from functools import wraps
 import asyncio
 import uuid
@@ -23,11 +37,11 @@ logger = logging.getLogger(__name__)
 
 # Define TypeVars for input and output types
 T = TypeVar("T")
-R = TypeVar("R")
+R = TypeVar("R", bound=Union[Any, None])
 
 
 # Check LangGraph version
-def _check_langgraph_version():
+def _check_langgraph_version() -> bool:
     """Check LangGraph version to determine if interrupt feature is supported"""
     try:
         import importlib.metadata
@@ -86,30 +100,52 @@ class LangGraphAdapter:
         self.manager = manager
         self.default_timeout = default_timeout
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "LangGraphAdapter":
         """Implements async context manager protocol, automatically manages manager lifecycle"""
-        if hasattr(self.manager, "__aenter__"):
-            await self.manager.__aenter__()
+
+        manager = cast(Any, self.manager)
+        if hasattr(manager, "__aenter__"):
+            await manager.__aenter__()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> Optional[bool]:
         """Implements async context manager protocol, automatically manages manager lifecycle"""
-        if hasattr(self.manager, "__aexit__"):
-            await self.manager.__aexit__(exc_type, exc_val, exc_tb)
 
-    def __enter__(self):
+        manager = cast(Any, self.manager)
+        if hasattr(manager, "__aexit__"):
+            await manager.__aexit__(exc_type, exc_val, exc_tb)
+
+        return None
+
+    def __enter__(self) -> "LangGraphAdapter":
         """Implements sync context manager protocol, automatically manages manager lifecycle"""
-        if hasattr(self.manager, "__enter__"):
-            self.manager.__enter__()
+
+        manager = cast(Any, self.manager)
+        if hasattr(manager, "__enter__"):
+            manager.__enter__()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> Optional[bool]:
         """Implements sync context manager protocol, automatically manages manager lifecycle"""
-        if hasattr(self.manager, "__exit__"):
-            self.manager.__exit__(exc_type, exc_val, exc_tb)
+
+        manager = cast(Any, self.manager)
+        if hasattr(manager, "__exit__"):
+            manager.__exit__(exc_type, exc_val, exc_tb)
+
+        return None
 
     @asynccontextmanager
-    async def asession(self):
+    async def asession(self) -> AsyncIterator["LangGraphAdapter"]:
         """Provides async context manager for managing session lifecycle
 
         Example:
@@ -117,15 +153,16 @@ class LangGraphAdapter:
                 # Use adapter here
         """
         try:
-            if hasattr(self.manager, "__aenter__"):
-                await self.manager.__aenter__()
+            manager = cast(Any, self.manager)
+            if hasattr(manager, "__aenter__"):
+                await manager.__aenter__()
             yield self
         finally:
-            if hasattr(self.manager, "__aexit__"):
-                await self.manager.__aexit__(None, None, None)
+            if hasattr(manager, "__aexit__"):
+                await manager.__aexit__(None, None, None)
 
     @contextmanager
-    def session(self):
+    def session(self) -> Iterator["LangGraphAdapter"]:
         """Provides a synchronous context manager for managing session lifecycle
 
         Example:
@@ -133,12 +170,13 @@ class LangGraphAdapter:
                 # Use adapter here
         """
         try:
-            if hasattr(self.manager, "__enter__"):
-                self.manager.__enter__()
+            manager = cast(Any, self.manager)
+            if hasattr(manager, "__enter__"):
+                manager.__enter__()
             yield self
         finally:
-            if hasattr(self.manager, "__exit__"):
-                self.manager.__exit__(None, None, None)
+            if hasattr(manager, "__exit__"):
+                manager.__exit__(None, None, None)
 
     def require_approval(
         self,
@@ -160,7 +198,7 @@ class LangGraphAdapter:
         if conversation_id is None:
             conversation_id = str(uuid.uuid4())
 
-        def decorator(fn):
+        def decorator(fn: Callable) -> Callable:
             return self._approve_cli(
                 fn,
                 task_id,
@@ -190,9 +228,12 @@ class LangGraphAdapter:
         callback: Optional[
             Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]
         ] = None,
-    ) -> Callable[[T], R | None]:
+    ) -> Union[
+        Callable[[T], Coroutine[Any, Any, R]],  # For async functions
+        Callable[[T], R],  # For sync functions
+    ]:
         """
-        Converts function type from Callable[[T], R] to Callable[[T], R | None]
+        Converts function type from Callable[[T], R] to Callable[[T], R]
 
         Passes approval results through keyword arguments while maintaining original function signature
 
@@ -233,7 +274,7 @@ class LangGraphAdapter:
         """
 
         @wraps(fn)
-        async def async_wrapper(*args, **kwargs) -> R | None:
+        async def async_wrapper(*args: Any, **kwargs: Any) -> R:
             # Determine if callback is instance or factory function
             cb = None
             if callable(callback) and not isinstance(callback, HumanLoopCallback):
@@ -288,14 +329,18 @@ class LangGraphAdapter:
                 # Handle based on approval status
                 if result.status == HumanLoopStatus.APPROVED:
                     if iscoroutinefunction(fn):
-                        return await fn(*args, **kwargs)
-                    return fn(*args, **kwargs)
+                        ret = await fn(*args, **kwargs)
+                    else:
+                        ret = fn(*args, **kwargs)
+                    return cast(R, ret)
                 elif result.status == HumanLoopStatus.REJECTED:
                     # If execute on reject is set, run the function
                     if execute_on_reject:
                         if iscoroutinefunction(fn):
-                            return await fn(*args, **kwargs)
-                        return fn(*args, **kwargs)
+                            ret = await fn(*args, **kwargs)
+                        else:
+                            ret = fn(*args, **kwargs)
+                        return cast(R, ret)
                     # Otherwise return rejection info
                     reason = result.response
                     raise ValueError(
@@ -309,12 +354,13 @@ class LangGraphAdapter:
                 raise ValueError(f"Unknown approval error: {fn.__name__}")
 
         @wraps(fn)
-        def sync_wrapper(*args, **kwargs) -> R | None:
-            return run_async_safely(async_wrapper(*args, **kwargs))
+        def sync_wrapper(*args: Any, **kwargs: Any) -> R:
+            ret = run_async_safely(async_wrapper(*args, **kwargs))
+            return cast(R, ret)
 
         # Return corresponding wrapper based on decorated function type
         if iscoroutinefunction(fn):
-            return async_wrapper  # type: ignore
+            return async_wrapper
         return sync_wrapper
 
     def require_conversation(
@@ -338,7 +384,7 @@ class LangGraphAdapter:
         if conversation_id is None:
             conversation_id = str(uuid.uuid4())
 
-        def decorator(fn):
+        def decorator(fn: Callable) -> Callable:
             return self._conversation_cli(
                 fn,
                 task_id,
@@ -346,8 +392,8 @@ class LangGraphAdapter:
                 state_key,
                 ret_key,
                 additional,
-                provider_id,
                 metadata,
+                provider_id,
                 timeout,
                 callback,
             )
@@ -368,10 +414,13 @@ class LangGraphAdapter:
         callback: Optional[
             Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]
         ] = None,
-    ) -> Callable[[T], R | None]:
+    ) -> Union[
+        Callable[[T], Coroutine[Any, Any, R]],  # For async functions
+        Callable[[T], R],  # For sync functions
+    ]:
         """Internal decorator implementation for multi-turn conversation scenario
 
-        Converts function type from Callable[[T], R] to Callable[[T], R | None]
+        Converts function type from Callable[[T], R] to Callable[[T], R]
 
         Main features:
         1. Conduct multi-turn conversations through human-machine interaction
@@ -410,7 +459,7 @@ class LangGraphAdapter:
         """
 
         @wraps(fn)
-        async def async_wrapper(*args, **kwargs) -> R | None:
+        async def async_wrapper(*args: Any, **kwargs: Any) -> R:
             # Determine if callback is instance or factory function
             cb = None
             state = args[0] if args else None
@@ -500,19 +549,22 @@ class LangGraphAdapter:
 
             if isinstance(result, HumanLoopResult):
                 if iscoroutinefunction(fn):
-                    return await fn(*args, **kwargs)
-                return fn(*args, **kwargs)
+                    ret = await fn(*args, **kwargs)
+                else:
+                    ret = fn(*args, **kwargs)
+                return cast(R, ret)
             else:
                 raise ValueError(
                     f"Conversation request timeout or error for {fn.__name__}"
                 )
 
         @wraps(fn)
-        def sync_wrapper(*args, **kwargs) -> R | None:
-            return run_async_safely(async_wrapper(*args, **kwargs))
+        def sync_wrapper(*args: Any, **kwargs: Any) -> R:
+            ret = run_async_safely(async_wrapper(*args, **kwargs))
+            return cast(R, ret)
 
         if iscoroutinefunction(fn):
-            return async_wrapper  # type: ignore
+            return async_wrapper
         return sync_wrapper
 
     def require_info(
@@ -535,7 +587,7 @@ class LangGraphAdapter:
         if conversation_id is None:
             conversation_id = str(uuid.uuid4())
 
-        def decorator(fn):
+        def decorator(fn: Callable) -> Callable:
             return self._get_info_cli(
                 fn,
                 task_id,
@@ -563,9 +615,12 @@ class LangGraphAdapter:
         callback: Optional[
             Union[HumanLoopCallback, Callable[[Any], HumanLoopCallback]]
         ] = None,
-    ) -> Callable[[T], R | None]:
+    ) -> Union[
+        Callable[[T], Coroutine[Any, Any, R]],  # For async functions
+        Callable[[T], R],  # For sync functions
+    ]:
         """Internal decorator implementation for information gathering scenario
-        Converts function type from Callable[[T], R] to Callable[[T], R | None]
+        Converts function type from Callable[[T], R] to Callable[[T], R]
 
         Main features:
         1. Get required information through human-machine interaction
@@ -603,7 +658,7 @@ class LangGraphAdapter:
         """
 
         @wraps(fn)
-        async def async_wrapper(*args, **kwargs) -> R | None:
+        async def async_wrapper(*args: Any, **kwargs: Any) -> R:
             # Determine if callback is an instance or factory function
             # callback: can be HumanLoopCallback instance or factory function
             # - If factory function: accepts state parameter and returns HumanLoopCallback instance
@@ -662,18 +717,21 @@ class LangGraphAdapter:
             if isinstance(result, HumanLoopResult):
                 # 返回获取信息结果，由用户去判断是否使用
                 if iscoroutinefunction(fn):
-                    return await fn(*args, **kwargs)
-                return fn(*args, **kwargs)
+                    ret = await fn(*args, **kwargs)
+                else:
+                    ret = fn(*args, **kwargs)
+                return cast(R, ret)
             else:
                 raise ValueError(f"Info request timeout or error for {fn.__name__}")
 
         @wraps(fn)
-        def sync_wrapper(*args, **kwargs) -> R | None:
-            return run_async_safely(async_wrapper(*args, **kwargs))
+        def sync_wrapper(*args: Any, **kwargs: Any) -> R:
+            ret = run_async_safely(async_wrapper(*args, **kwargs))
+            return cast(R, ret)
 
         # 根据被装饰函数类型返回对应的wrapper
         if iscoroutinefunction(fn):
-            return async_wrapper  # type: ignore
+            return async_wrapper
         return sync_wrapper
 
 
@@ -692,7 +750,7 @@ class LangGraphHumanLoopCallback(HumanLoopCallback):
         async_on_error: Optional[
             Callable[[Any, HumanLoopProvider, Exception], Awaitable[None]]
         ] = None,
-    ):
+    ) -> None:
         self.state = state
         self.async_on_update = async_on_update
         self.async_on_timeout = async_on_timeout
@@ -700,20 +758,20 @@ class LangGraphHumanLoopCallback(HumanLoopCallback):
 
     async def async_on_humanloop_update(
         self, provider: HumanLoopProvider, result: HumanLoopResult
-    ):
+    ) -> None:
         if self.async_on_update:
             await self.async_on_update(self.state, provider, result)
 
     async def async_on_humanloop_timeout(
         self,
         provider: HumanLoopProvider,
-    ):
+    ) -> None:
         if self.async_on_timeout:
             await self.async_on_timeout(self.state, provider)
 
     async def async_on_humanloop_error(
         self, provider: HumanLoopProvider, error: Exception
-    ):
+    ) -> None:
         if self.async_on_error:
             await self.async_on_error(self.state, provider, error)
 
@@ -736,8 +794,8 @@ def default_langgraph_callback_factory(state: Any) -> LangGraphHumanLoopCallback
     """
 
     async def async_on_update(
-        state, provider: HumanLoopProvider, result: HumanLoopResult
-    ):
+        state: Any, provider: HumanLoopProvider, result: HumanLoopResult
+    ) -> None:
         """Log human interaction update events"""
         logger.info(f"Provider ID: {provider.name}")
         logger.info(
@@ -749,7 +807,7 @@ def default_langgraph_callback_factory(state: Any) -> LangGraphHumanLoopCallback
             f"feedback={result.feedback}"
         )
 
-    async def async_on_timeout(state, provider: HumanLoopProvider):
+    async def async_on_timeout(state: Any, provider: HumanLoopProvider) -> None:
         """Log human interaction timeout events"""
 
         logger.info(f"Provider ID: {provider.name}")
@@ -760,7 +818,9 @@ def default_langgraph_callback_factory(state: Any) -> LangGraphHumanLoopCallback
 
         # Alert logic can be added here, such as sending notifications
 
-    async def async_on_error(state, provider: HumanLoopProvider, error: Exception):
+    async def async_on_error(
+        state: Any, provider: HumanLoopProvider, error: Exception
+    ) -> None:
         """Log human interaction error events"""
 
         logger.info(f"Provider ID: {provider.name}")
@@ -857,7 +917,7 @@ def create_resume_command(lg_humanloop: LangGraphAdapter = default_adapter) -> A
         )
 
     # Define async polling function
-    def poll_for_result():
+    def poll_for_result() -> Optional[Dict[str, Any]]:
         poll_interval = 1.0  # Polling interval (seconds)
         while True:
             result = lg_humanloop.manager.check_conversation_status(
@@ -898,7 +958,7 @@ async def acreate_resume_command(
         )
 
     # Define async polling function
-    async def poll_for_result():
+    async def poll_for_result() -> Optional[Dict[str, Any]]:
         poll_interval = 1.0  # Polling interval (seconds)
         while True:
             result = await lg_humanloop.manager.async_check_conversation_status(

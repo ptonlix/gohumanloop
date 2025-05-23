@@ -2,7 +2,7 @@
 
 check-py: ## Run code quality tools.
 	: 🚀 installing uv deps
-	uv sync
+	uv sync --all-extras
 	: 🚀 Linting code: Running pre-commit
 	uv run pre-commit run -a
 	@$(MAKE) typecheck
@@ -18,7 +18,7 @@ typecheck: ## just the typechecks
 
 .PHONY: test-py
 test-py: ## Test the code with pytest
-	uv run pytest ./gohumanloop --cov --cov-config=pyproject.toml --cov-report=xml --junitxml=junit.xml
+	uv run pytest . --cov --cov-config=pyproject.toml --cov-report=xml --junitxml=junit.xml
 
 .PHONY: test
 test: test-py

@@ -1,10 +1,10 @@
 import asyncio
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 
 import aiohttp
 from pydantic import SecretStr
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, Future
 from gohumanloop.core.interface import HumanLoopResult, HumanLoopStatus, HumanLoopType
 from gohumanloop.providers.base import BaseProvider
 from gohumanloop.models.api_model import (
@@ -59,11 +59,11 @@ class APIProvider(BaseProvider):
         self.max_retries = max_retries
 
         # Store the currently running polling tasks.
-        self._poll_tasks = {}
+        self._poll_tasks: Dict[Tuple[str, str], Future] = {}
         # Create thread pool for background service execution
         self._executor = ThreadPoolExecutor(max_workers=10)
 
-    def __del__(self):
+    def __del__(self) -> None:
         """析构函数，确保线程池被正确关闭"""
         self._executor.shutdown(wait=False)
 
@@ -136,7 +136,7 @@ class APIProvider(BaseProvider):
                         headers=request_headers,
                         timeout=self.request_timeout,
                     ) as response:
-                        response_data = await response.json()
+                        response_data: Dict[str, Any] = await response.json()
                         # Check response status
                         if response.status >= 400:
                             error_msg = response_data.get(
@@ -168,6 +168,8 @@ class APIProvider(BaseProvider):
                     await asyncio.sleep(1 * (attempt + 1))
                     continue
                 raise
+
+        return None
 
     async def async_request_humanloop(
         self,
@@ -240,7 +242,8 @@ class APIProvider(BaseProvider):
             )
 
             # Check API response
-            api_response = APIResponse(**response)
+            response_data = response or {}
+            api_response = APIResponse(**response_data)
             if not api_response.success:
                 error_msg = (
                     api_response.error or "API request failed without error message"
@@ -294,7 +297,7 @@ class APIProvider(BaseProvider):
 
     def _run_async_poll_request_status(
         self, conversation_id: str, request_id: str, platform: str
-    ):
+    ) -> None:
         """Run asynchronous API interaction in a separate thread"""
         # Create new event loop
         loop = asyncio.new_event_loop()
@@ -386,7 +389,8 @@ class APIProvider(BaseProvider):
             )
 
             # Check API response
-            api_response = APIResponse(**response)
+            response_data = response or {}
+            api_response = APIResponse(**response_data)
             if not api_response.success:
                 error_msg = (
                     api_response.error or "Cancel request failed without error message"
@@ -447,7 +451,8 @@ class APIProvider(BaseProvider):
             )
 
             # Check API response
-            api_response = APIResponse(**response)
+            response_data = response or {}
+            api_response = APIResponse(**response_data)
             if not api_response.success:
                 error_msg = (
                     api_response.error
@@ -549,7 +554,8 @@ class APIProvider(BaseProvider):
             )
 
             # Check API response
-            api_response = APIResponse(**response)
+            response_data = response or {}
+            api_response = APIResponse(**response_data)
             if not api_response.success:
                 error_msg = (
                     api_response.error
@@ -637,7 +643,8 @@ class APIProvider(BaseProvider):
                 )
 
                 # Parse response
-                status_response = HumanLoopStatusResponse(**response)
+                response_data = response or {}
+                status_response = HumanLoopStatusResponse(**response_data)
 
                 # Log error but continue polling if request fails
                 if not status_response.success:

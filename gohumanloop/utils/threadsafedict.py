@@ -29,7 +29,7 @@ class ThreadSafeDict(Generic[K, V]):
     - 使用全局锁 self._global_lock 保护键级别锁的创建和删除
     """
 
-    def __init__(self)-> None:
+    def __init__(self) -> None:
         self._dict: dict[Any, Any] = {}
         # 使用 threading.RLock 支持同步操作的线程安全
         self._sync_lock = threading.RLock()
@@ -40,7 +40,7 @@ class ThreadSafeDict(Generic[K, V]):
         # 键级别锁的全局锁
         self._global_lock = asyncio.Lock()
 
-    async def _get_key_lock(self, key: K)-> asyncio.Lock:
+    async def _get_key_lock(self, key: K) -> asyncio.Lock:
         """获取指定键的锁，如果不存在则创建"""
         async with self._global_lock:
             if key not in self._key_locks:
@@ -78,17 +78,17 @@ class ThreadSafeDict(Generic[K, V]):
         with self._sync_lock:
             return len(self._dict)
 
-    def keys(self)-> list:
+    def keys(self) -> list:
         """获取所有键 - 同步方法"""
         with self._sync_lock:
             return list(self._dict.keys())
 
-    def values(self)-> list:
+    def values(self) -> list:
         """获取所有值 - 同步方法"""
         with self._sync_lock:
             return list(self._dict.values())
 
-    def items(self)-> list:
+    def items(self) -> list:
         """获取所有键值对 - 同步方法"""
         with self._sync_lock:
             return list(self._dict.items())
@@ -166,17 +166,17 @@ class ThreadSafeDict(Generic[K, V]):
         async with self._async_lock:
             return len(self._dict)
 
-    async def akeys(self)-> list:
+    async def akeys(self) -> list:
         """安全地获取所有键 - 异步方法"""
         async with self._async_lock:
             return list(self._dict.keys())
 
-    async def avalues(self)-> list:
+    async def avalues(self) -> list:
         """安全地获取所有值 - 异步方法"""
         async with self._async_lock:
             return list(self._dict.values())
 
-    async def aitems(self)-> list:
+    async def aitems(self) -> list:
         """安全地获取所有键值对 - 异步方法"""
         async with self._async_lock:
             return list(self._dict.items())
@@ -184,7 +184,7 @@ class ThreadSafeDict(Generic[K, V]):
 
 if __name__ == "__main__":
     # 测试同步方法
-    def test_sync_methods()-> None:
+    def test_sync_methods() -> None:
         print("\n=== 测试同步方法 ===")
         sync_dict: ThreadSafeDict = ThreadSafeDict()
 
@@ -216,9 +216,9 @@ if __name__ == "__main__":
         print("删除后检查:", "key1" in sync_dict)  # False
 
     # 测试异步方法
-    async def test_async_methods()-> None:
+    async def test_async_methods() -> None:
         print("\n=== 测试异步方法 ===")
-        async_dict:ThreadSafeDict = ThreadSafeDict()
+        async_dict: ThreadSafeDict = ThreadSafeDict()
 
         # 测试基本的异步增删改查
         await async_dict.aset("key1", "value1")

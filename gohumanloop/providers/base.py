@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Dict, Any, Optional, List, Awaitable, Dict, Tuple, Set
+from typing import Dict, Any, Optional, List, Tuple
 import asyncio
 import json
 import uuid
@@ -24,7 +24,9 @@ class BaseProvider(HumanLoopProvider, ABC):
         # Custom name, will use UUID if not provided
         self.name = name
         # Store request information using (conversation_id, request_id) as key
-        self._requests: ThreadSafeDict[Tuple[str, str], Dict[str, Any]] = (
+        self._requests: ThreadSafeDict[
+            Tuple[str, str], Dict[str, Any]
+        ] = (
             ThreadSafeDict()
         )  # Using thread-safe dictionary to store request information
         # Store conversation information, including request list and latest request ID
@@ -111,7 +113,9 @@ class BaseProvider(HumanLoopProvider, ABC):
         self, conversation_id: str, request_id: str
     ) -> Optional[Dict[str, Any]]:
         """Get request information"""
-        ret: Optional[Dict[str, Any]] =  self._requests.get((conversation_id, request_id))
+        ret: Optional[Dict[str, Any]] = self._requests.get(
+            (conversation_id, request_id)
+        )
         return ret
 
     def _get_conversation(self, conversation_id: str) -> Optional[Dict[str, Any]]:
@@ -170,7 +174,7 @@ class BaseProvider(HumanLoopProvider, ABC):
             HumanLoopResult: Result object containing request ID and initial status
         """
 
-        result: HumanLoopResult  = run_async_safely(
+        result: HumanLoopResult = run_async_safely(
             self.async_request_humanloop(
                 task_id=task_id,
                 conversation_id=conversation_id,
@@ -276,7 +280,6 @@ class BaseProvider(HumanLoopProvider, ABC):
 
         return result
 
-
     async def async_cancel_request(self, conversation_id: str, request_id: str) -> bool:
         """Cancel human-in-the-loop request
 
@@ -318,7 +321,6 @@ class BaseProvider(HumanLoopProvider, ABC):
         )
 
         return result
-
 
     async def async_cancel_conversation(self, conversation_id: str) -> bool:
         """Cancel the entire conversation
@@ -369,7 +371,6 @@ class BaseProvider(HumanLoopProvider, ABC):
         )
 
         return result
-
 
     async def async_continue_humanloop(
         self,
@@ -422,7 +423,7 @@ class BaseProvider(HumanLoopProvider, ABC):
             HumanLoopResult: Result object containing request ID and status
         """
 
-        result: HumanLoopResult =  run_async_safely(
+        result: HumanLoopResult = run_async_safely(
             self.async_continue_humanloop(
                 conversation_id=conversation_id,
                 context=context,
@@ -475,7 +476,7 @@ class BaseProvider(HumanLoopProvider, ABC):
                                  status, context, response and other information
         """
 
-        result:List[Dict[str, Any]] =  run_async_safely(
+        result: List[Dict[str, Any]] = run_async_safely(
             self.async_get_conversation_history(conversation_id=conversation_id)
         )
 
@@ -483,7 +484,7 @@ class BaseProvider(HumanLoopProvider, ABC):
 
     async def _async_create_timeout_task(
         self, conversation_id: str, request_id: str, timeout: int
-    )-> None:
+    ) -> None:
         """Create timeout task
 
         Args:
@@ -492,7 +493,7 @@ class BaseProvider(HumanLoopProvider, ABC):
             timeout: Timeout duration in seconds
         """
 
-        async def timeout_task()-> None:
+        async def timeout_task() -> None:
             await asyncio.sleep(timeout)
 
             # Check current status
@@ -538,7 +539,7 @@ class BaseProvider(HumanLoopProvider, ABC):
         """
 
         # Auto detect if terminal supports ANSI colors
-        def _supports_color()-> bool:
+        def _supports_color() -> bool:
             try:
                 import sys
 

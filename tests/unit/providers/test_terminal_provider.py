@@ -401,7 +401,7 @@ class TestHumanLoopRequest(IsolatedAsyncioTestCase):
             provider, "_process_terminal_interaction", new_callable=AsyncMock
         ) as mock_process:
             # 继续对话
-            result = await provider.continue_humanloop(
+            result = await provider.async_continue_humanloop(
                 conversation_id=conversation_id,
                 context={"message": "感谢您的回复，还有其他问题吗？"},
                 metadata={"test_key": "test_value"},
@@ -435,7 +435,7 @@ class TestHumanLoopRequest(IsolatedAsyncioTestCase):
         provider = TerminalProvider(name="test_terminal_provider")
 
         # 继续不存在的对话
-        result = await provider.continue_humanloop(
+        result = await provider.async_continue_humanloop(
             conversation_id="non_existent", context={"message": "继续对话"}
         )
 
@@ -485,7 +485,7 @@ class TestTerminalInputProcessing(IsolatedAsyncioTestCase):
             mock_loop.return_value.run_in_executor = mock_executor
 
             # 模拟 _handle_approval_interaction 方法，以便测试递归调用
-            original_method = provider._handle_approval_interaction
+            original_method = provider._async_handle_approval_interaction
             call_count = [0]
 
             async def mock_handle_approval(*args, **kwargs):
@@ -512,7 +512,7 @@ class TestTerminalInputProcessing(IsolatedAsyncioTestCase):
                 side_effect=mock_handle_approval,
             ):
                 # 调用处理函数
-                await provider._handle_approval_interaction(
+                await provider._async_handle_approval_interaction(
                     conversation_id,
                     request_id,
                     provider._requests[(conversation_id, request_id)],

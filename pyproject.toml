@@ -11,6 +11,8 @@ dependencies = [
     "aiohttp>=3.11.16",
     "click>=8.1.8",
     "dotenv>=0.9.9",
+    "pydantic>=2.11.3",
+    "tomli>=2.2.1",
 ]
 
 [project.urls]
@@ -24,7 +26,13 @@ gohumanloop = "gohumanloop.cli.main:cli"
 email = [
     "imapclient>=3.0.1",
 ]
-
+langgraph = [
+    "langgraph>=0.3.30",
+]
+apiservices= [
+    "fastapi>=0.115.12",
+    "uvicorn>=0.34.2"
+]
 
 [build-system]
 requires = ["setuptools>=61.0.0", "wheel"]
@@ -35,9 +43,11 @@ include = ["gohumanloop", "gohumanloop.*"]
 
 [tool.pytest.ini_options]
 asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
 
 [dependency-groups]
 dev = [
+    "deptry>=0.23.0",
     "fastapi>=0.115.12",
     "langchain-openai>=0.3.12",
     "langgraph>=0.3.30",
@@ -45,6 +55,7 @@ dev = [
     "pre-commit>=4.2.0",
     "pytest>=8.3.5",
     "pytest-asyncio>=0.26.0",
+    "pytest-cov>=6.1.1",
     "uvicorn>=0.34.2",
 ]
 
@@ -57,3 +68,10 @@ check_untyped_defs = "True"
 warn_return_any = "True"
 warn_unused_ignores = "True"
 show_error_codes = "True"
+
+[tool.deptry]
+exclude = ["examples", "venv", ".venv", "tmp"]
+
+[tool.deptry.per_rule_ignores]
+DEP003 = ["click"]
+DEP004 = ["pytest"]

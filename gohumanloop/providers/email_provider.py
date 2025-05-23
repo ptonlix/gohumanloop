@@ -2,7 +2,7 @@ import os
 import re
 import asyncio
 import smtplib
-from imapclient import IMAPClient
+from imapclient import IMAPClient  # type: ignore
 import email.mime.multipart
 import email.mime.text
 from email.header import decode_header
@@ -12,7 +12,7 @@ import logging
 from typing import Dict, Any, Optional, Tuple
 from datetime import datetime
 from pydantic import SecretStr
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, Future
 
 from gohumanloop.core.interface import HumanLoopResult, HumanLoopStatus, HumanLoopType
 from gohumanloop.providers.base import BaseProvider
@@ -77,18 +77,18 @@ class EmailProvider(BaseProvider):
         self.check_interval = check_interval
 
         # 存储邮件主题与请求ID的映射关系
-        self._subject_to_request = {}
+        self._subject_to_request: Dict[str, Tuple[str, str]] = {}
         # 存储正在运行的邮件检查任务
-        self._mail_check_tasks = {}
+        self._mail_check_tasks: Dict[Tuple[str, str], Future] = {}
         # 存储邮件会话ID与对话ID的映射
-        self._thread_to_conversation = {}
+        self._thread_to_conversation: Dict[str, str] = {}
 
         self._init_language_templates()
 
         # Create thread pool for background service execution
         self._executor = ThreadPoolExecutor(max_workers=10)
 
-    def __del__(self):
+    def __del__(self) -> None:
         """析构函数，确保线程池被正确关闭"""
         self._executor.shutdown(wait=False)
 
@@ -97,7 +97,7 @@ class EmailProvider(BaseProvider):
             future.cancel()
         self._mail_check_tasks.clear()
 
-    def _init_language_templates(self):
+    def _init_language_templates(self) -> None:
         """初始化不同语言的模板和关键词"""
         if self.language == "zh":
             # 中文关键词和模板
@@ -196,10 +196,14 @@ class EmailProvider(BaseProvider):
             logger.error(f"Failed to send email: {str(e)}", exc_info=True)
             return False
 
-    def _send_email_sync(self, msg):
+    def _send_email_sync(self, msg: email.mime.multipart.MIMEMultipart) -> None:
         """Synchronously send email (runs in executor)"""
         try:
             with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port) as server:
+                if self.username is None:
+                    raise ValueError("Username is not set")
+                if self.password is None:
+                    raise ValueError("Password is not set")
                 server.login(self.username, self.password.get_secret_value())
                 server.send_message(msg)
         except smtplib.SMTPException as e:
@@ -211,7 +215,7 @@ class EmailProvider(BaseProvider):
 
     async def _async_check_emails(
         self, conversation_id: str, request_id: str, recipient_email: str, subject: str
-    ):
+    ) -> None:
         """Check email replies
 
         Args:
@@ -280,6 +284,10 @@ class EmailProvider(BaseProvider):
 
         # 连接到IMAP服务器
         with IMAPClient(host=self.imap_server, port=self.imap_port, ssl=True) as client:
+            if self.username is None:
+                raise ValueError("Username is not set")
+            if self.password is None:
+                raise ValueError("Password is not set")
             client.login(self.username, self.password.get_secret_value())
 
             # 发送 ID 命令，解决某些邮箱服务器的安全限制（如网易邮箱）
@@ -331,7 +339,7 @@ class EmailProvider(BaseProvider):
 
     async def _process_email_response(
         self, conversation_id: str, request_id: str, email_msg: Message
-    ):
+    ) -> None:
         """Process email response
 
         Args:
@@ -353,7 +361,7 @@ class EmailProvider(BaseProvider):
         if email_msg.is_multipart():
             for part in email_msg.walk():
                 content_type = part.get_content_type()
-                charse_type = part.get_content_charset()
+                charse_type = part.get_content_charset() or "utf-8"
                 content_disposition = str(part.get("Content-Disposition"))
 
                 # 跳过附件
@@ -365,15 +373,17 @@ class EmailProvider(BaseProvider):
                 if payload is None:
                     continue
 
-                if content_type == "text/plain":
-                    body = payload.decode(encoding=charse_type)
-                elif content_type == "text/html":
-                    html_body = payload.decode(encoding=charse_type)
+                if isinstance(payload, bytes):
+                    if content_type == "text/plain":
+                        # 如果字符集未指定，使用默认的utf-8
+                        body = payload.decode(encoding=charse_type)
+                    elif content_type == "text/html":
+                        html_body = payload.decode(encoding=charse_type)
         else:
             # 非多部分邮件
-            charse_type = email_msg.get_content_charset()
+            charse_type = email_msg.get_content_charset() or "utf-8"
             payload = email_msg.get_payload(decode=True)
-            if payload:
+            if isinstance(payload, bytes):
                 body = payload.decode(encoding=charse_type)
 
         # 获取请求信息
@@ -397,8 +407,8 @@ class EmailProvider(BaseProvider):
         # 根据不同的循环类型解析回复
         if loop_type == HumanLoopType.APPROVAL:
             # 解析审批决定和理由
-            decision = None
-            reason = None
+            decision = ""
+            reason = ""
 
             # 使用语言相关的关键词
             approve_keywords = self.approve_keywords
@@ -406,29 +416,31 @@ class EmailProvider(BaseProvider):
             decision_prefix = self.templates["decision_prefix"]
 
             # 遍历每行内容寻找决定信息
-            for line in map(str.strip, user_content.split("\n")):
-                if not line.startswith(decision_prefix):
-                    continue
+            if user_content:
+                for line in map(str.strip, user_content.split("\n")):
+                    if not line.startswith(decision_prefix):
+                        continue
 
-                decision_text = line[len(decision_prefix) :].strip().lower()
+                    decision_text = line[len(decision_prefix) :].strip().lower()
 
-                # 判断决定类型
-                if any(keyword in decision_text for keyword in approve_keywords):
-                    decision = "approved"
-                elif any(keyword in decision_text for keyword in reject_keywords):
-                    decision = "rejected"
-                else:
-                    decision = "rejected"
-                    reason = self.templates["invalid_decision"]
+                    # 判断决定类型
+                    if any(keyword in decision_text for keyword in approve_keywords):
+                        decision = "approved"
+                    elif any(keyword in decision_text for keyword in reject_keywords):
+                        decision = "rejected"
+                    else:
+                        decision = "rejected"
+                        reason = self.templates["invalid_decision"]
+                        break
+
+                    # 提取理由
+                    reason_prefix = self.templates["reason_prefix"]
+                    if reason_prefix in line:
+                        reason = line[
+                            line.find(reason_prefix) + len(reason_prefix) :
+                        ].strip()
                     break
 
-                # 提取理由
-                reason_prefix = self.templates["reason_prefix"]
-                if reason_prefix in line:
-                    reason = line[
-                        line.find(reason_prefix) + len(reason_prefix) :
-                    ].strip()
-                break
             parsed_response["decision"] = decision
             parsed_response["reason"] = reason
 
@@ -440,14 +452,15 @@ class EmailProvider(BaseProvider):
 
         elif loop_type == HumanLoopType.INFORMATION:
             # 解析提供的信息和备注
-            information = None
+            information = ""
             information_prefix = self.templates["information_prefix"]
 
-            for line in user_content.split("\n"):
-                line = line.strip()
-                if line.startswith(information_prefix):
-                    information = line[len(information_prefix) :].strip()
-                    break
+            if user_content:
+                for line in user_content.split("\n"):
+                    line = line.strip()
+                    if line.startswith(information_prefix):
+                        information = line[len(information_prefix) :].strip()
+                        break
 
             parsed_response["information"] = information
             status = HumanLoopStatus.COMPLETED
@@ -460,7 +473,7 @@ class EmailProvider(BaseProvider):
                 parsed_response["user_content"] = user_content
                 status = HumanLoopStatus.COMPLETED
             else:
-                parsed_response["user_content"] = user_content
+                parsed_response["user_content"] = user_content or ""
                 status = HumanLoopStatus.INPROGRESS
         else:
             status = HumanLoopStatus.COMPLETED
@@ -774,7 +787,7 @@ class EmailProvider(BaseProvider):
 
     def _run_email_check_task(
         self, conversation_id: str, request_id: str, recipient_email: str, subject: str
-    ):
+    ) -> None:
         """Run email check task in thread
 
         Args:
@@ -921,7 +934,7 @@ class EmailProvider(BaseProvider):
         if conversation_id in self._conversations:
             conversation_info = self._get_conversation(conversation_id)
             if conversation_info:
-                latest_request_id = conversation_info.get("latest_request_id")
+                latest_request_id = conversation_info.get("latest_request_id") or ""
                 last_request_key = (conversation_id, latest_request_id)
                 if last_request_key in self._requests:
                     last_metadata = self._requests[last_request_key].get("metadata", {})
@@ -1026,7 +1039,7 @@ class EmailProvider(BaseProvider):
         # 调用父类方法取消对话
         return await super().async_cancel_conversation(conversation_id)
 
-    def _extract_user_reply_content(self, body: str) -> str:
+    def _extract_user_reply_content(self, body: str) -> str | None:
         """Extract the actual reply content from the email, excluding quoted original email content
 
         Args:
@@ -1106,3 +1119,6 @@ class EmailProvider(BaseProvider):
                 return "User didn't provide valid reply content"
 
             return user_content
+
+        # 如果没有找到任何有效的用户回复内容，返回 None
+        return None
