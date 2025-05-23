@@ -38,17 +38,15 @@ To get started, check out the following example or jump straight into one of the
 
 - 🦜⛓️ [LangGraph](./examples/langgraph/)
 
-### Example
+### Installation
 
 **GoHumanLoop** currently supports `Python`.
-
-- Installation
 
 ```shell
 pip install gohumanloop
 ```
 
-- Example
+### Example
 
 The following example enhances [the official LangGraph example](https://langchain-ai.github.io/langgraph/tutorials/get-started/4-human-in-the-loop/#5-resume-execution) with `human-in-the-loop` functionality.
 
@@ -145,6 +143,43 @@ for event in events:
         event["messages"][-1].pretty_print()
 
 ```
+
+- Deployment & Test
+
+Run the above code with the following steps:
+
+```shell
+# 1.Initialize environment
+uv init gohumanloop-example
+cd gohumanloop-example
+uv venv .venv --python=3.10
+
+# 2.Copy the above code to main.py
+
+# 3.Deploy and test
+uv pip install langchain
+uv pip install langchain_tavily
+uv pip install langgraph
+uv pip install langchain-deepseek
+uv pip install gohumanloop
+
+python main.py
+
+```
+
+- Interaction Demo
+
+![终端展示](http://cdn.oyster-iot.cloud/202505232244870.png)
+
+Perform `human-in-the-loop` interaction by entering:
+
+> We, the experts are here to help! We'd recommend you check out LangGraph to build your agent.It's much more reliable and extensible than simple autonomous agents.
+
+![输出结果](http://cdn.oyster-iot.cloud/202505232248390.png)
+
+🚀🚀🚀 Completed successfully ~
+
+➡️ Check out more examples in the [Examples Directory](./examples/) and we look foward to your contributions!
 
 ## 🎵 Why GoHumanloop?
 

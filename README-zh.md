@@ -37,7 +37,7 @@ Ensures responsible AI deployment by bridging autonomous agents and human judgme
 
 - 🦜⛓️ [LangGraph](./examples/langgraph/)
 
-### Example
+### Installation
 
 **GoHumanLoop** 目前支持`Python`
 
@@ -47,9 +47,9 @@ Ensures responsible AI deployment by bridging autonomous agents and human judgme
 pip install gohumanloop
 ```
 
-- 示例
+### Example
 
-以下基于 [LangGraph 官方例子](https://langchain-ai.github.io/langgraph/tutorials/get-started/4-human-in-the-loop/#5-resume-execution) 升级 `human-in-the-loop`
+以下基于 [LangGraph 官方例子](https://langchain-ai.github.io/langgraph/tutorials/get-started/4-human-in-the-loop/#5-resume-execution) 通过 `GoHumanLoop`升级 `human-in-the-loop`
 
 > 💡 默认采用 `Terminal` 作为 `langgraph_adapter` 人机交互方式
 
@@ -71,7 +71,9 @@ from langgraph.prebuilt import ToolNode, tools_condition
 
 from gohumanloop.adapters.langgraph_adapter import interrupt, create_resume_command
 
+# Please replace with your Deepseek API Key from https://platform.deepseek.com/usage
 os.environ["DEEPSEEK_API_KEY"] = "sk-xxx"
+# Please replace with your Tavily API Key from https://app.tavily.com/home
 os.environ["TAVILY_API_KEY"] = "tvly-xxx"
 
 llm = init_chat_model("deepseek:deepseek-chat")
@@ -144,6 +146,43 @@ for event in events:
         event["messages"][-1].pretty_print()
 
 ```
+
+- 部署测试
+
+运行上述代码
+
+```shell
+# 1.Initialize environment
+uv init gohumanloop-example
+cd gohumanloop-example
+uv venv .venv --python=3.10
+
+# 2.Copy the above code to main.py
+
+# 3.Deploy and test
+uv pip install langchain
+uv pip install langchain_tavily
+uv pip install langgraph
+uv pip install langchain-deepseek
+uv pip install gohumanloop
+
+python main.py
+
+```
+
+- 交互信息
+
+![终端展示](http://cdn.oyster-iot.cloud/202505232244870.png)
+
+进行 `human-in-the-loop` 交互, 输入信息
+
+> We, the experts are here to help! We'd recommend you check out LangGraph to build your agent.It's much more reliable and extensible than simple autonomous agents.
+
+![输出结果](http://cdn.oyster-iot.cloud/202505232248390.png)
+
+完成 🚀🚀🚀
+
+➡️ 更多示例请查看[示例目录](./examples/)，并期待你的分享～
 
 ## 🎵 Why GoHumanloop?
 
