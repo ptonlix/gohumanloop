@@ -33,7 +33,7 @@ Ensures responsible AI deployment by bridging autonomous agents and human judgme
 
 ## 🎹 Getting Started
 
-To get started, check out the following example or jump straight into one of the [Examples](./examples/):
+快速开始，请查看以下示例或直接跳转到[示例目录](./examples/)中的案例：
 
 - 🦜⛓️ [LangGraph](./examples/langgraph/)
 
