@@ -70,7 +70,9 @@ from langgraph.prebuilt import ToolNode, tools_condition
 
 from gohumanloop.adapters.langgraph_adapter import interrupt, create_resume_command
 
+# Please replace with your Deepseek API Key from https://platform.deepseek.com/usage
 os.environ["DEEPSEEK_API_KEY"] = "sk-xxx"
+# Please replace with your Tavily API Key from https://app.tavily.com/home
 os.environ["TAVILY_API_KEY"] = "tvly-xxx"
 
 llm = init_chat_model("deepseek:deepseek-chat")
