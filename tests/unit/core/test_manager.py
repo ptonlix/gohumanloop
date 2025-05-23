@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, AsyncMock
 from unittest.async_case import IsolatedAsyncioTestCase
 
 from gohumanloop.core.interface import (
@@ -49,7 +49,9 @@ class TestDefaultHumanLoopManager(IsolatedAsyncioTestCase):
     async def test_register_provider(self):
         """测试注册提供者"""
         # 测试异步注册
-        provider_id = await self.manager.async_register_provider(self.provider, "test_provider")
+        provider_id = await self.manager.async_register_provider(
+            self.provider, "test_provider"
+        )
         self.assertEqual(provider_id, "test_provider")
         self.assertIn("test_provider", self.manager.providers)
         self.assertEqual(self.manager.providers["test_provider"], self.provider)
@@ -99,8 +101,12 @@ class TestDefaultHumanLoopManager(IsolatedAsyncioTestCase):
         self.assertIn("test-conv", self.manager._task_conversations["test-task"])
         self.assertIn("test-conv", self.manager._conversation_requests)
         self.assertIn("test-req", self.manager._conversation_requests["test-conv"])
-        self.assertEqual(self.manager._request_task[("test-conv", "test-req")], "test-task")
-        self.assertEqual(self.manager._conversation_provider["test-conv"], "test_provider")
+        self.assertEqual(
+            self.manager._request_task[("test-conv", "test-req")], "test-task"
+        )
+        self.assertEqual(
+            self.manager._conversation_provider["test-conv"], "test_provider"
+        )
 
     async def test_continue_humanloop(self):
         """测试继续人机循环"""
@@ -172,7 +178,9 @@ class TestDefaultHumanLoopManager(IsolatedAsyncioTestCase):
         # 验证结果
         self.assertEqual(result.status, HumanLoopStatus.APPROVED)
         self.assertEqual(result.response, {"decision": "approved"})
-        self.provider.async_check_request_status.assert_called_once_with("test-conv", "test-req")
+        self.provider.async_check_request_status.assert_called_once_with(
+            "test-conv", "test-req"
+        )
 
     async def test_cancel_request(self):
         """测试取消请求"""
@@ -207,7 +215,9 @@ class TestDefaultHumanLoopManager(IsolatedAsyncioTestCase):
 
         # 验证结果
         self.assertTrue(result)
-        self.provider.async_cancel_request.assert_called_once_with("test-conv", "test-req")
+        self.provider.async_cancel_request.assert_called_once_with(
+            "test-conv", "test-req"
+        )
 
         # 验证内部状态更新
         self.assertNotIn("test-req", self.manager._conversation_requests["test-conv"])
