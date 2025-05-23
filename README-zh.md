@@ -226,10 +226,10 @@ GoHumanLoop SDK 和文档是开源的，我们欢迎以问题、文档和 PR 等
 
 ## 📱 Contact
 
-<img height=360 src="https://img.gejiba.com/images/f0cf4242e87615dff574806169f9732a.png"/>
+<img height=300 src="http://cdn.oyster-iot.cloud/202505231802103.png"/>
 
 🎉 如果你对本项目感兴趣，欢迎扫码联系作者交流
 
----
+## 🌟 Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=gohumanloop/gohumanloop&type=Date)](https://star-history.com/#gohumanloop/gohumanloop&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=gohumanloop/gohumanloop&type=Date)](https://www.star-history.com/#gohumanloop/gohumanloop&Date)
