@@ -720,7 +720,7 @@ class AgentOpsHumanLoopCallback(HumanLoopCallback):
             import importlib.util
 
             if importlib.util.find_spec("agentops") is not None:
-                import agentops # type: ignore
+                import agentops  # type: ignore
 
                 agentops.init(tags=self.session_tags)
             else:
@@ -732,7 +732,7 @@ class AgentOpsHumanLoopCallback(HumanLoopCallback):
 
     async def async_on_humanloop_request(
         self, provider: HumanLoopProvider, request: HumanLoopRequest
-    )-> None:
+    ) -> None:
         """Handle human loop start events."""
         try:
             import agentops

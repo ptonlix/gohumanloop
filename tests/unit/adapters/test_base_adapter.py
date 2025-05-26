@@ -1,8 +1,8 @@
 import unittest
 from unittest.mock import MagicMock
 
-from gohumanloop.adapters.langgraph_adapter import (
-    LangGraphAdapter,
+from gohumanloop.adapters.base_adapter import (
+    HumanloopAdapter,
     HumanLoopWrapper,
 )
 from gohumanloop.core.interface import (
@@ -18,7 +18,7 @@ class TestLangGraphAdapter(unittest.TestCase):
         # 创建模拟的 HumanLoopManager
         self.mock_manager = MagicMock(spec=HumanLoopManager)
         # 创建测试用的适配器实例
-        self.adapter = LangGraphAdapter(self.mock_manager, default_timeout=30)
+        self.adapter = HumanloopAdapter(self.mock_manager, default_timeout=30)
 
     def test_initialization(self):
         """测试 LangGraphAdapter 类的初始化"""
@@ -27,7 +27,7 @@ class TestLangGraphAdapter(unittest.TestCase):
         self.assertEqual(self.adapter.default_timeout, 30)
 
         # 测试默认超时参数
-        adapter_no_timeout = LangGraphAdapter(self.mock_manager)
+        adapter_no_timeout = HumanloopAdapter(self.mock_manager)
         self.assertIsNone(adapter_no_timeout.default_timeout)
 
     def test_human_loop_wrapper(self):
