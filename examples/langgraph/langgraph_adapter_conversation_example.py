@@ -17,7 +17,7 @@ from langgraph.graph import StateGraph, END
 from gohumanloop.core.interface import HumanLoopStatus
 from gohumanloop.core.manager import DefaultHumanLoopManager
 from gohumanloop.providers.terminal_provider import TerminalProvider
-from gohumanloop.adapters.langgraph_adapter import LangGraphAdapter
+from gohumanloop.adapters.langgraph_adapter import HumanloopAdapter
 
 
 # 定义工作流状态类型
@@ -32,7 +32,7 @@ class AgentState(TypedDict):
 # 初始化人机循环管理器和适配器
 cli_provider = TerminalProvider(name="cli_provider")
 manager = DefaultHumanLoopManager(cli_provider)
-adapter = LangGraphAdapter(manager, default_timeout=300)
+adapter = HumanloopAdapter(manager, default_timeout=300)
 
 # 加载环境变量
 load_dotenv()

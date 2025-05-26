@@ -1,8 +1,10 @@
 from typing import Dict, Any, Optional, List, Union
 import asyncio
+from datetime import datetime
 from gohumanloop.utils import run_async_safely
 
 from gohumanloop.core.interface import (
+    HumanLoopRequest,
     HumanLoopManager,
     HumanLoopProvider,
     HumanLoopCallback,
@@ -147,6 +149,25 @@ class DefaultHumanLoopManager(HumanLoopManager):
 
             # 如果提供了回调，存储它
             if callback:
+                try:
+                    # 创建请求对象
+                    request = HumanLoopRequest(
+                        task_id=task_id,
+                        conversation_id=conversation_id,
+                        loop_type=loop_type,
+                        context=context,
+                        metadata=metadata or {},
+                        timeout=timeout,
+                        created_at=datetime.now(),
+                    )
+                    await callback.async_on_humanloop_request(provider, request)
+                except Exception as e:
+                    # 处理回调执行过程中的异常
+                    try:
+                        await callback.async_on_humanloop_error(provider, e)
+                    except Exception:
+                        # 如果错误回调也失败，只能忽略
+                        pass
                 self._callbacks[(conversation_id, request_id)] = callback
 
             # 如果设置了超时，创建超时任务
@@ -266,6 +287,25 @@ class DefaultHumanLoopManager(HumanLoopManager):
 
             # 如果提供了回调，存储它
             if callback:
+                try:
+                    # 创建请求对象
+                    request = HumanLoopRequest(
+                        task_id=task_id or "",
+                        conversation_id=conversation_id,
+                        loop_type=HumanLoopType.CONVERSATION,
+                        context=context,
+                        metadata=metadata or {},
+                        timeout=timeout,
+                        created_at=datetime.now(),
+                    )
+                    await callback.async_on_humanloop_request(provider, request)
+                except Exception as e:
+                    # 处理回调执行过程中的异常
+                    try:
+                        await callback.async_on_humanloop_error(provider, e)
+                    except Exception:
+                        # 如果错误回调也失败，只能忽略
+                        pass
                 self._callbacks[(conversation_id, request_id)] = callback
 
             # 如果设置了超时，创建超时任务
@@ -613,7 +653,7 @@ class DefaultHumanLoopManager(HumanLoopManager):
             # INPROGRESS状态表示对话正在进行中，不应视为超时
             if result.status == HumanLoopStatus.PENDING:
                 if callback:
-                    await callback.async_on_humanloop_timeout(provider=provider)
+                    await callback.async_on_humanloop_timeout(provider=provider, result=result)
             # 如果状态是INPROGRESS，重置超时任务
             elif result.status == HumanLoopStatus.INPROGRESS:
                 # 对于进行中的对话，我们可以选择延长超时时间

@@ -19,7 +19,7 @@ from langgraph.graph import StateGraph, END
 
 # 导入 GoHumanLoop 相关库
 from gohumanloop.manager.ghl_manager import GoHumanLoopManager
-from gohumanloop.adapters.langgraph_adapter import LangGraphAdapter
+from gohumanloop.adapters.langgraph_adapter import HumanloopAdapter
 from gohumanloop.core.interface import HumanLoopStatus
 
 # 设置环境变量
@@ -37,7 +37,7 @@ class SimpleState(TypedDict):
 manager = GoHumanLoopManager(request_timeout=30, poll_interval=5, auto_start_sync=True)
 
 # 创建 LangGraphAdapter 实例
-adapter = LangGraphAdapter(
+adapter = HumanloopAdapter(
     manager=manager,
     default_timeout=300,  # 默认超时时间为5分钟
 )

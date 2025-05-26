@@ -293,6 +293,19 @@ class HumanLoopCallback(ABC):
     """人机循环回调的抽象类"""
 
     @abstractmethod
+    async def async_on_humanloop_request(
+        self, provider: HumanLoopProvider, request: HumanLoopRequest
+    ) -> None:
+        """当人机循环请求开始时的回调
+
+        Args:
+            provider: 人机循环提供者实例
+            request: 循环请求
+        """
+        pass
+
+
+    @abstractmethod
     async def async_on_humanloop_update(
         self, provider: HumanLoopProvider, result: HumanLoopResult
     ) -> None:
@@ -308,6 +321,7 @@ class HumanLoopCallback(ABC):
     async def async_on_humanloop_timeout(
         self,
         provider: HumanLoopProvider,
+        result: HumanLoopResult
     ) -> None:
         """当请求超时时的回调
 

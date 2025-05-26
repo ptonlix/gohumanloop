@@ -1,5 +1,5 @@
 from .langgraph_adapter import (
-    LangGraphAdapter,
+    HumanloopAdapter,
     LangGraphHumanLoopCallback,
     default_langgraph_callback_factory,
     interrupt,
@@ -8,7 +8,7 @@ from .langgraph_adapter import (
 )
 
 __all__ = [
-    "LangGraphAdapter",
+    "HumanloopAdapter",
     "LangGraphHumanLoopCallback",
     "default_langgraph_callback_factory",
     "interrupt",

@@ -7,7 +7,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 
-from gohumanloop.adapters.langgraph_adapter import LangGraphAdapter
+from gohumanloop.adapters.langgraph_adapter import HumanloopAdapter
 from gohumanloop.manager.ghl_manager import GoHumanLoopManager
 from gohumanloop.providers.terminal_provider import TerminalProvider
 from gohumanloop.providers.email_provider import EmailProvider
@@ -62,7 +62,7 @@ manager = GoHumanLoopManager(
 )
 
 # 创建 LangGraphAdapter 实例
-adapter = LangGraphAdapter(manager, default_timeout=600)
+adapter = HumanloopAdapter(manager, default_timeout=600)
 
 
 # 使用审批装饰器的敏感操作

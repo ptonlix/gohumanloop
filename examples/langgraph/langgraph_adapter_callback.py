@@ -10,7 +10,7 @@ from gohumanloop.core.interface import HumanLoopStatus
 from gohumanloop.core.manager import DefaultHumanLoopManager
 from gohumanloop.providers.terminal_provider import TerminalProvider
 from gohumanloop.adapters.langgraph_adapter import (
-    LangGraphAdapter,
+    HumanloopAdapter,
     default_langgraph_callback_factory,
 )
 
@@ -34,7 +34,7 @@ class WorkflowState(TypedDict):
 manager = DefaultHumanLoopManager(
     initial_providers=TerminalProvider(name="TerminalProvider")
 )
-adapter = LangGraphAdapter(manager)
+adapter = HumanloopAdapter(manager)
 
 
 # 定义工作流节点
