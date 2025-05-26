@@ -11,7 +11,6 @@ from typing import (
     AsyncIterator,
     Iterator,
     Coroutine,
-    Awaitable,
 )
 from types import TracebackType
 from functools import wraps
@@ -28,13 +27,7 @@ from gohumanloop.core.interface import (
     HumanLoopType,
     HumanLoopCallback,
     HumanLoopProvider,
-)
-from gohumanloop.core.interface import (
-    HumanLoopManager,
-    HumanLoopResult,
-    HumanLoopStatus,
-    HumanLoopType,
-    HumanLoopCallback,
+    HumanLoopManager
 )
 
 logger = logging.getLogger(__name__)
@@ -42,6 +35,7 @@ logger = logging.getLogger(__name__)
 # Define TypeVars for input and output types
 T = TypeVar("T")
 R = TypeVar("R", bound=Union[Any, None])
+
 
 class HumanLoopWrapper:
     def __init__(
@@ -709,17 +703,14 @@ class HumanloopAdapter:
 
 class AgentOpsHumanLoopCallback(HumanLoopCallback):
     """AgentOps-specific human loop callback, compatible with TypedDict or Pydantic BaseModel State
-    
+
     This implementation integrates with AgentOps for monitoring and tracking human-in-the-loop interactions.
     It records events, tracks metrics, and provides observability for human-agent interactions.
     """
 
-    def __init__(
-        self,
-        session_tags: Optional[List[str]] = None
-    ) -> None:
+    def __init__(self, session_tags: Optional[List[str]] = None) -> None:
         """Initialize the AgentOps human loop callback.
-        
+
         Args:
             session_tags: Optional tags for AgentOps session tracking
         """
@@ -728,8 +719,10 @@ class AgentOpsHumanLoopCallback(HumanLoopCallback):
         try:
             # 延迟导入，只在需要时导入
             import importlib.util
+
             if importlib.util.find_spec("agentops") is not None:
                 import agentops
+
                 # Check if AgentOps is already initialized
                 api_key = agentops.get_client().config.api_key
                 if not api_key:
@@ -739,7 +732,9 @@ class AgentOpsHumanLoopCallback(HumanLoopCallback):
                     # Add our tags to existing session
                     agentops.add_tags(self.session_tags)
             else:
-                logger.debug("AgentOps package not installed. AgentOps features disabled.")
+                logger.debug(
+                    "AgentOps package not installed. AgentOps features disabled."
+                )
         except Exception as e:
             logger.warning(f"Failed to initialize AgentOps: {str(e)}")
 
@@ -749,6 +744,7 @@ class AgentOpsHumanLoopCallback(HumanLoopCallback):
         """Handle human loop start events."""
         try:
             import agentops
+
             # 修改导入路径，直接从 agentops 导入 Event
             from agentops import ActionEvent
 
@@ -776,23 +772,24 @@ class AgentOpsHumanLoopCallback(HumanLoopCallback):
             agentops.record(event)
         except (ImportError, Exception) as e:
             logger.warning(f"Failed to record AgentOps event: {str(e)}")
-            
+
         ...
 
     async def async_on_humanloop_update(
         self, provider: HumanLoopProvider, result: HumanLoopResult
     ) -> None:
         """Handle human loop update events.
-        
+
         Args:
             provider: The human loop provider instance
             result: The human loop result containing status and response
         """
         try:
             import agentops
+
             # 修改导入路径，直接从 agentops 导入 Event
             from agentops import ActionEvent
-            
+
             # Create event data
             event_data = {
                 "event_type": "gohumanloop_update",
@@ -807,29 +804,31 @@ class AgentOpsHumanLoopCallback(HumanLoopCallback):
                 "responded_at": result.responded_at,
                 "error": result.error,
             }
-            
+
             # Record the event
-            event = ActionEvent("human_interaction", event_data, tags=self.session_tags,)
+            event = ActionEvent(
+                "human_interaction",
+                event_data,
+                tags=self.session_tags,
+            )
             agentops.record(event)
         except Exception as e:
             logger.warning(f"Failed to record AgentOps event: {str(e)}")
-        
 
     async def async_on_humanloop_timeout(
-        self,
-        provider: HumanLoopProvider,
-        result: HumanLoopResult
+        self, provider: HumanLoopProvider, result: HumanLoopResult
     ) -> None:
         """Handle human loop timeout events.
-        
+
         Args:
             provider: The human loop provider instance
         """
         try:
             import agentops
+
             # 修改导入路径，直接从 agentops 导入 ErrorEvent
             from agentops import ErrorEvent
-            
+
             # Create error event
             error_data = {
                 "error_type": "gohumanloop_timeout",
@@ -844,7 +843,7 @@ class AgentOpsHumanLoopCallback(HumanLoopCallback):
                 "responded_at": result.responded_at,
                 "error": result.error,
             }
-            
+
             # Record the error event
             error_event = ErrorEvent("human_interaction_timeout", error_data)
             agentops.record(error_event)
@@ -855,23 +854,24 @@ class AgentOpsHumanLoopCallback(HumanLoopCallback):
         self, provider: HumanLoopProvider, error: Exception
     ) -> None:
         """Handle human loop error events.
-        
+
         Args:
             provider: The human loop provider instance
             error: The exception that occurred
         """
         try:
             import agentops
+
             # 修改导入路径，直接从 agentops 导入 ErrorEvent
             from agentops import ErrorEvent
-            
+
             # Create error event
             error_data = {
                 "error_type": type(error).__name__,
                 "provider": provider.name,
                 "message": str(error),
             }
-            
+
             # Record the error event
             error_event = ErrorEvent("human_interaction_error", error_data)
             agentops.record(error_event)

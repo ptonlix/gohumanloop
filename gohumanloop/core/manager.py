@@ -653,7 +653,9 @@ class DefaultHumanLoopManager(HumanLoopManager):
             # INPROGRESS状态表示对话正在进行中，不应视为超时
             if result.status == HumanLoopStatus.PENDING:
                 if callback:
-                    await callback.async_on_humanloop_timeout(provider=provider, result=result)
+                    await callback.async_on_humanloop_timeout(
+                        provider=provider, result=result
+                    )
             # 如果状态是INPROGRESS，重置超时任务
             elif result.status == HumanLoopStatus.INPROGRESS:
                 # 对于进行中的对话，我们可以选择延长超时时间

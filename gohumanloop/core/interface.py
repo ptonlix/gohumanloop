@@ -304,7 +304,6 @@ class HumanLoopCallback(ABC):
         """
         pass
 
-
     @abstractmethod
     async def async_on_humanloop_update(
         self, provider: HumanLoopProvider, result: HumanLoopResult
@@ -319,9 +318,7 @@ class HumanLoopCallback(ABC):
 
     @abstractmethod
     async def async_on_humanloop_timeout(
-        self,
-        provider: HumanLoopProvider,
-        result: HumanLoopResult
+        self, provider: HumanLoopProvider, result: HumanLoopResult
     ) -> None:
         """当请求超时时的回调
 

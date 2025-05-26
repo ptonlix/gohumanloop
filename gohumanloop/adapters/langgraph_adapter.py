@@ -100,9 +100,7 @@ class LangGraphHumanLoopCallback(HumanLoopCallback):
             await self.async_on_update(self.state, provider, result)
 
     async def async_on_humanloop_timeout(
-        self,
-        provider: HumanLoopProvider,
-        result: HumanLoopResult
+        self, provider: HumanLoopProvider, result: HumanLoopResult
     ) -> None:
         if self.async_on_timeout:
             await self.async_on_timeout(self.state, provider, result)
@@ -163,7 +161,9 @@ def default_langgraph_callback_factory(state: Any) -> LangGraphHumanLoopCallback
             f"feedback={result.feedback}"
         )
 
-    async def async_on_timeout(state: Any, provider: HumanLoopProvider, result: HumanLoopResult) -> None:
+    async def async_on_timeout(
+        state: Any, provider: HumanLoopProvider, result: HumanLoopResult
+    ) -> None:
         """Log human interaction timeout events"""
 
         logger.info(f"Provider ID: {provider.name}")
