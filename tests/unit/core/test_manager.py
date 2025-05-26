@@ -33,6 +33,7 @@ class MockHumanLoopCallback:
     """模拟人机循环回调"""
 
     def __init__(self):
+        self.async_on_humanloop_request = AsyncMock()
         self.async_on_humanloop_update = AsyncMock()
         self.async_on_humanloop_timeout = AsyncMock()
         self.async_on_humanloop_error = AsyncMock()

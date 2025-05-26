@@ -27,7 +27,7 @@ from gohumanloop.core.interface import (
     HumanLoopType,
     HumanLoopCallback,
     HumanLoopProvider,
-    HumanLoopManager
+    HumanLoopManager,
 )
 
 logger = logging.getLogger(__name__)
@@ -717,23 +717,15 @@ class AgentOpsHumanLoopCallback(HumanLoopCallback):
         self.session_tags = session_tags or ["gohumanloop"]
 
         try:
-            # 延迟导入，只在需要时导入
             import importlib.util
 
             if importlib.util.find_spec("agentops") is not None:
                 import agentops
 
-                # Check if AgentOps is already initialized
-                api_key = agentops.get_client().config.api_key
-                if not api_key:
-                    # Try to initialize with environment variable
-                    agentops.init(tags=self.session_tags)
-                else:
-                    # Add our tags to existing session
-                    agentops.add_tags(self.session_tags)
+                agentops.init(tags=self.session_tags)
             else:
                 logger.debug(
-                    "AgentOps package not installed. AgentOps features disabled."
+                    "AgentOps package not installed. AgentOps features disabled. Please pip install agentops"
                 )
         except Exception as e:
             logger.warning(f"Failed to initialize AgentOps: {str(e)}")
@@ -831,7 +823,7 @@ class AgentOpsHumanLoopCallback(HumanLoopCallback):
 
             # Create error event
             error_data = {
-                "error_type": "gohumanloop_timeout",
+                "event_type": "gohumanloop_timeout",
                 "provider": provider.name,
                 "conversation_id": result.conversation_id,
                 "request_id": result.request_id,
@@ -867,9 +859,9 @@ class AgentOpsHumanLoopCallback(HumanLoopCallback):
 
             # Create error event
             error_data = {
-                "error_type": type(error).__name__,
+                "event_type": "gohumanloop_error",
                 "provider": provider.name,
-                "message": str(error),
+                "error": str(error),
             }
 
             # Record the error event

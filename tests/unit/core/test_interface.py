@@ -8,6 +8,7 @@ from gohumanloop.core.interface import (
     HumanLoopStatus,
     HumanLoopType,
     HumanLoopRequest,
+    HumanLoopRequest,
     HumanLoopResult,
     HumanLoopProvider,
     HumanLoopCallback,
@@ -155,6 +156,13 @@ class MockCallbackImplementation(HumanLoopCallback):
         self.last_result = None
         self.last_error = None
 
+    async def async_on_humanloop_request(
+        self, provider: HumanLoopProvider, request: HumanLoopRequest
+    ) -> None:
+        self.update_called = True
+        self.last_provider = provider
+        self.last_request = request
+
     async def async_on_humanloop_update(
         self, provider: HumanLoopProvider, result: HumanLoopResult
     ) -> None:
@@ -165,6 +173,7 @@ class MockCallbackImplementation(HumanLoopCallback):
     async def async_on_humanloop_timeout(
         self,
         provider: HumanLoopProvider,
+        result: HumanLoopResult,
     ) -> None:
         self.timeout_called = True
         self.last_provider = provider
@@ -201,7 +210,7 @@ class TestHumanLoopCallback(IsolatedAsyncioTestCase):
         self.assertEqual(callback.last_result, result)
 
         # 测试超时回调
-        await callback.async_on_humanloop_timeout(provider_mock)
+        await callback.async_on_humanloop_timeout(provider_mock, result)
         self.assertTrue(callback.timeout_called)
         self.assertEqual(callback.last_provider, provider_mock)
 
