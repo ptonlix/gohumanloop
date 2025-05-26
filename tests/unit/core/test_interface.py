@@ -8,7 +8,6 @@ from gohumanloop.core.interface import (
     HumanLoopStatus,
     HumanLoopType,
     HumanLoopRequest,
-    HumanLoopRequest,
     HumanLoopResult,
     HumanLoopProvider,
     HumanLoopCallback,
