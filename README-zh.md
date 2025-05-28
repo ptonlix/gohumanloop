@@ -33,9 +33,10 @@ Ensures responsible AI deployment by bridging autonomous agents and human judgme
 
 ## 🎹 Getting Started
 
-快速开始，请查看以下示例或直接跳转到[示例目录](./examples/)中的案例：
+快速开始，请查看以下示例或直接跳转到[示例仓库](https://github.com/ptonlix/gohumanloop-examples)中的案例：
 
-- 🦜⛓️ [LangGraph](./examples/langgraph/)
+- 🦜⛓️ [LangGraph](https://github.com/ptonlix/gohumanloop-examples/tree/main/LangGraph)
+- 🚣‍ [CrewAI](https://github.com/ptonlix/gohumanloop-examples/tree/main/CrewAI)
 
 ### Installation
 
@@ -182,7 +183,7 @@ python main.py
 
 完成 🚀🚀🚀
 
-➡️ 更多示例请查看[示例目录](./examples/)，并期待你的分享～
+➡️ 更多示例请查看[示例仓库](https://github.com/ptonlix/gohumanloop-examples)，并期待你的分享～
 
 ## 🎵 Why GoHumanloop?
 

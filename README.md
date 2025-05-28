@@ -8,7 +8,7 @@
 **GoHumanLoop**: A Python library empowering AI agents to dynamically request human input (approval/feedback/conversation) at critical stages. Core features:
 
 - `Human-in-the-loop control`: Lets AI agent systems pause and escalate decisions, enhancing safety and trust.
-- `Multi-channel integration`: Supports Terminal, Email, API, and frameworks like LangGraph/CrewAI (soon).
+- `Multi-channel integration`: Supports Terminal, Email, API, and frameworks like LangGraph/CrewAI/...(soon)
 - `Flexible workflows`: Combines automated reasoning with human oversight for reliable AI operations.
 
 Ensures responsible AI deployment by bridging autonomous agents and human judgment.
@@ -34,9 +34,10 @@ Ensures responsible AI deployment by bridging autonomous agents and human judgme
 
 ## 🎹 Getting Started
 
-To get started, check out the following example or jump straight into one of the [Examples](./examples/):
+To get started, check out the following example or jump straight into one of the [Examples Repo](https://github.com/ptonlix/gohumanloop-examples):
 
-- 🦜⛓️ [LangGraph](./examples/langgraph/)
+- 🦜⛓️ [LangGraph](https://github.com/ptonlix/gohumanloop-examples/tree/main/LangGraph)
+- 🚣‍ [CrewAI](https://github.com/ptonlix/gohumanloop-examples/tree/main/CrewAI)
 
 ### Installation
 
@@ -181,7 +182,7 @@ Perform `human-in-the-loop` interaction by entering:
 
 🚀🚀🚀 Completed successfully ~
 
-➡️ Check out more examples in the [Examples Directory](./examples/) and we look foward to your contributions!
+➡️ Check out more examples in the [Examples Repository](https://github.com/ptonlix/gohumanloop-examples) and we look foward to your contributions!
 
 ## 🎵 Why GoHumanloop?
 

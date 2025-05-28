@@ -725,10 +725,8 @@ class AgentOpsHumanLoopCallback(HumanLoopCallback):
                 self._operation = operation
                 agentops.init(tags=self.session_tags)
             else:
-                logger.debug(
-                    "AgentOps package not installed. Features disabled. "
-                    "Please install with: pip install agentops"
-                )
+                raise ImportError("AgentOps package not installed. Features disabled. "
+                    "Please install with: pip install agentops")
         except Exception as e:
             logger.warning(f"AgentOps initialization failed: {e}")
 
