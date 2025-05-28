@@ -17,6 +17,8 @@ from gohumanloop.providers.terminal_provider import TerminalProvider
 
 from gohumanloop.utils import run_async_safely, get_secret_from_env
 
+from gohumanloop.adapters import HumanloopAdapter, AgentOpsHumanLoopCallback
+
 # Conditionally import EmailProvider
 try:
     from gohumanloop.providers.email_provider import EmailProvider  # noqa: F401
@@ -60,6 +62,9 @@ __all__ = [
     "APIProvider",
     "GoHumanLoopProvider",
     "TerminalProvider",
+    # Adapter Implementations
+    "HumanloopAdapter",
+    "AgentOpsHumanLoopCallback",
     # Utility Functions
     "run_async_safely",
     "get_secret_from_env",

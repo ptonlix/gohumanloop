@@ -708,36 +708,42 @@ class AgentOpsHumanLoopCallback(HumanLoopCallback):
     It records events, tracks metrics, and provides observability for human-agent interactions.
     """
 
-    import importlib.util
-
-    if importlib.util.find_spec("agentops") is not None:
-        from agentops.sdk import session, agent, operation, task  # type: ignore
-    else:
-        logger.debug(
-            "AgentOps package not installed. AgentOps features disabled. Please pip install agentops"
-        )
-
     def __init__(self, session_tags: Optional[List[str]] = None) -> None:
-        """Initialize the AgentOps human loop callback.
-
-        Args:
-            session_tags: Optional tags for AgentOps session tracking
-        """
         self.session_tags = session_tags or ["gohumanloop"]
+        self._operation = None
+        self._initialize_agentops()
 
+    def _initialize_agentops(self) -> None:
+        """Initialize AgentOps if available, otherwise fall back gracefully."""
         try:
-            import agentops  # type: ignore
+            import importlib.util
 
-            agentops.init(tags=self.session_tags)
+            if importlib.util.find_spec("agentops"):
+                from agentops.sdk import operation  # type: ignore
+                import agentops  # type: ignore
+
+                self._operation = operation
+                agentops.init(tags=self.session_tags)
+            else:
+                logger.debug(
+                    "AgentOps package not installed. Features disabled. "
+                    "Please install with: pip install agentops"
+                )
         except Exception as e:
-            logger.warning(f"Failed to initialize AgentOps: {str(e)}")
+            logger.warning(f"AgentOps initialization failed: {e}")
 
-    @operation
+    @property
+    def operation_decorator(self) -> Callable:
+        """Return the appropriate decorator based on AgentOps availability."""
+        return self._operation if self._operation is not None else lambda f: f
+
     async def async_on_humanloop_request(
         self, provider: HumanLoopProvider, request: HumanLoopRequest
     ) -> Any:
         """Handle human loop start events."""
-        try:
+
+        @self.operation_decorator
+        async def callback_humanloop_request() -> Any:
             # Create event data
             event_data = {
                 "event_type": "gohumanloop_request",
@@ -752,10 +758,9 @@ class AgentOpsHumanLoopCallback(HumanLoopCallback):
                 "created_at": request.created_at,
             }
             return event_data
-        except (ImportError, Exception) as e:
-            logger.warning(f"Failed to record AgentOps event: {str(e)}")
 
-    @operation
+        return await callback_humanloop_request()
+
     async def async_on_humanloop_update(
         self, provider: HumanLoopProvider, result: HumanLoopResult
     ) -> Any:
@@ -765,7 +770,9 @@ class AgentOpsHumanLoopCallback(HumanLoopCallback):
             provider: The human loop provider instance
             result: The human loop result containing status and response
         """
-        try:
+
+        @self.operation_decorator
+        async def callback_humanloop_update() -> Any:
             # Create event data
             event_data = {
                 "event_type": "gohumanloop_update",
@@ -782,10 +789,9 @@ class AgentOpsHumanLoopCallback(HumanLoopCallback):
             }
 
             return event_data
-        except Exception as e:
-            logger.warning(f"Failed to record AgentOps event: {str(e)}")
 
-    @operation
+        return await callback_humanloop_update()
+
     async def async_on_humanloop_timeout(
         self, provider: HumanLoopProvider, result: HumanLoopResult
     ) -> Any:
@@ -794,7 +800,9 @@ class AgentOpsHumanLoopCallback(HumanLoopCallback):
         Args:
             provider: The human loop provider instance
         """
-        try:
+
+        @self.operation_decorator
+        async def callback_humanloop_timeout() -> Any:
             # Create error event
             error_data = {
                 "event_type": "gohumanloop_timeout",
@@ -811,10 +819,9 @@ class AgentOpsHumanLoopCallback(HumanLoopCallback):
             }
 
             return error_data
-        except Exception as e:
-            logger.warning(f"Failed to record AgentOps timeout event: {str(e)}")
 
-    @operation
+        return await callback_humanloop_timeout()
+
     async def async_on_humanloop_error(
         self, provider: HumanLoopProvider, error: Exception
     ) -> Any:
@@ -824,7 +831,9 @@ class AgentOpsHumanLoopCallback(HumanLoopCallback):
             provider: The human loop provider instance
             error: The exception that occurred
         """
-        try:
+
+        @self.operation_decorator
+        async def callback_humanloop_error() -> Any:
             # Create error event
             error_data = {
                 "event_type": "gohumanloop_error",
@@ -834,5 +843,5 @@ class AgentOpsHumanLoopCallback(HumanLoopCallback):
 
             # Record the error event
             return error_data
-        except Exception as e:
-            logger.warning(f"Failed to record AgentOps error event: {str(e)}")
+
+        return await callback_humanloop_error()
