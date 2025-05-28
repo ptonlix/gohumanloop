@@ -295,7 +295,7 @@ class HumanLoopCallback(ABC):
     @abstractmethod
     async def async_on_humanloop_request(
         self, provider: HumanLoopProvider, request: HumanLoopRequest
-    ) -> None:
+    ) -> Any:
         """当人机循环请求开始时的回调
 
         Args:
@@ -307,7 +307,7 @@ class HumanLoopCallback(ABC):
     @abstractmethod
     async def async_on_humanloop_update(
         self, provider: HumanLoopProvider, result: HumanLoopResult
-    ) -> None:
+    ) -> Any:
         """当请求更新时的回调
 
         Args:
@@ -319,7 +319,7 @@ class HumanLoopCallback(ABC):
     @abstractmethod
     async def async_on_humanloop_timeout(
         self, provider: HumanLoopProvider, result: HumanLoopResult
-    ) -> None:
+    ) -> Any:
         """当请求超时时的回调
 
         Args:
@@ -330,7 +330,7 @@ class HumanLoopCallback(ABC):
     @abstractmethod
     async def async_on_humanloop_error(
         self, provider: HumanLoopProvider, error: Exception
-    ) -> None:
+    ) -> Any:
         """当请求发生错误时的回调
 
         Args:

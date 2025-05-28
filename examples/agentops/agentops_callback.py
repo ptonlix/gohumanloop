@@ -1,4 +1,3 @@
-from re import T
 from typing import TypedDict
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, END
@@ -7,18 +6,22 @@ import logging
 from gohumanloop.core.interface import HumanLoopStatus
 from gohumanloop.core.manager import DefaultHumanLoopManager
 from gohumanloop.providers.terminal_provider import TerminalProvider
-from gohumanloop.adapters.langgraph_adapter import (
+from gohumanloop.adapters.base_adapter import (
     HumanloopAdapter,
-    default_langgraph_callback_factory,
+    AgentOpsHumanLoopCallback
 )
+from dotenv import load_dotenv
 
 # 配置日志
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("gohumanloop.langgraph")
 logger.setLevel(logging.INFO)
 
+# 加载环境变量
+load_dotenv()
 
 # 定义工作流状态
 class WorkflowState(TypedDict):
@@ -34,10 +37,9 @@ manager = DefaultHumanLoopManager(
 )
 adapter = HumanloopAdapter(manager)
 
-
 # 定义工作流节点
 @adapter.require_approval(
-    callback=default_langgraph_callback_factory,
+    callback=AgentOpsHumanLoopCallback(),
     ret_key="approval_info",
     execute_on_reject=True,
 )

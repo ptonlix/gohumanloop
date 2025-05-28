@@ -69,16 +69,16 @@ class LangGraphHumanLoopCallback(HumanLoopCallback):
         self,
         state: Any,
         async_on_request: Optional[
-            Callable[[Any, HumanLoopProvider, HumanLoopRequest], Awaitable[None]]
+            Callable[[Any, HumanLoopProvider, HumanLoopRequest], Awaitable[Any]]
         ] = None,
         async_on_update: Optional[
-            Callable[[Any, HumanLoopProvider, HumanLoopResult], Awaitable[None]]
+            Callable[[Any, HumanLoopProvider, HumanLoopResult], Awaitable[Any]]
         ] = None,
         async_on_timeout: Optional[
-            Callable[[Any, HumanLoopProvider, HumanLoopResult], Awaitable[None]]
+            Callable[[Any, HumanLoopProvider, HumanLoopResult], Awaitable[Any]]
         ] = None,
         async_on_error: Optional[
-            Callable[[Any, HumanLoopProvider, Exception], Awaitable[None]]
+            Callable[[Any, HumanLoopProvider, Exception], Awaitable[Any]]
         ] = None,
     ) -> None:
         self.state = state
@@ -89,25 +89,25 @@ class LangGraphHumanLoopCallback(HumanLoopCallback):
 
     async def async_on_humanloop_request(
         self, provider: HumanLoopProvider, request: HumanLoopRequest
-    ) -> None:
+    ) -> Any:
         if self.async_on_request:
             await self.async_on_request(self.state, provider, request)
 
     async def async_on_humanloop_update(
         self, provider: HumanLoopProvider, result: HumanLoopResult
-    ) -> None:
+    ) -> Any:
         if self.async_on_update:
             await self.async_on_update(self.state, provider, result)
 
     async def async_on_humanloop_timeout(
         self, provider: HumanLoopProvider, result: HumanLoopResult
-    ) -> None:
+    ) -> Any:
         if self.async_on_timeout:
             await self.async_on_timeout(self.state, provider, result)
 
     async def async_on_humanloop_error(
         self, provider: HumanLoopProvider, error: Exception
-    ) -> None:
+    ) -> Any:
         if self.async_on_error:
             await self.async_on_error(self.state, provider, error)
 
@@ -131,7 +131,7 @@ def default_langgraph_callback_factory(state: Any) -> LangGraphHumanLoopCallback
 
     async def async_on_request(
         state: Any, provider: HumanLoopProvider, request: HumanLoopRequest
-    ) -> None:
+    ) -> Any:
         """Log human interaction request events"""
         logger.info(f"Provider ID: {provider.name}")
         logger.info(
@@ -147,7 +147,7 @@ def default_langgraph_callback_factory(state: Any) -> LangGraphHumanLoopCallback
 
     async def async_on_update(
         state: Any, provider: HumanLoopProvider, result: HumanLoopResult
-    ) -> None:
+    ) -> Any:
         """Log human interaction update events"""
         logger.info(f"Provider ID: {provider.name}")
         logger.info(
@@ -163,7 +163,7 @@ def default_langgraph_callback_factory(state: Any) -> LangGraphHumanLoopCallback
 
     async def async_on_timeout(
         state: Any, provider: HumanLoopProvider, result: HumanLoopResult
-    ) -> None:
+    ) -> Any:
         """Log human interaction timeout events"""
 
         logger.info(f"Provider ID: {provider.name}")
@@ -186,7 +186,7 @@ def default_langgraph_callback_factory(state: Any) -> LangGraphHumanLoopCallback
 
     async def async_on_error(
         state: Any, provider: HumanLoopProvider, error: Exception
-    ) -> None:
+    ) -> Any:
         """Log human interaction error events"""
 
         logger.info(f"Provider ID: {provider.name}")
