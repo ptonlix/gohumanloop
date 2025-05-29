@@ -230,7 +230,7 @@ Through `GoHumanloop`'s encapsulation, you can implement secure and efficient `H
 ## 📚 Key Features
 
 <div align="center">
-	<img height=360 src="http://cdn.oyster-iot.cloud/202505211030197.png"><br>
+	<img height=360 src="http://cdn.oyster-iot.cloud/202505291027894.png"><br>
     <b face="雅黑"> GoHumanLoop Architecture</b>
 </div>
 <br>
