@@ -170,12 +170,6 @@ class DefaultHumanLoopManager(HumanLoopManager):
                         pass
                 self._callbacks[(conversation_id, request_id)] = callback
 
-            # 如果设置了超时，创建超时任务
-            if timeout:
-                await self._async_create_timeout_task(
-                    conversation_id, request_id, timeout, provider, callback
-                )
-
             # 如果是阻塞模式，等待结果
             if blocking:
                 return await self._async_wait_for_result(
@@ -308,12 +302,6 @@ class DefaultHumanLoopManager(HumanLoopManager):
                         pass
                 self._callbacks[(conversation_id, request_id)] = callback
 
-            # 如果设置了超时，创建超时任务
-            if timeout:
-                await self._async_create_timeout_task(
-                    conversation_id, request_id, timeout, provider, callback
-                )
-
             # 如果是阻塞模式，等待结果
             if blocking:
                 return await self._async_wait_for_result(
@@ -429,22 +417,31 @@ class DefaultHumanLoopManager(HumanLoopManager):
 
         try:
             #  检查对话指定provider_id或默认provider_id最后一次请求的状态
-            return await provider.async_check_conversation_status(conversation_id)
-        except Exception as e:
-            # 处理检查对话状态过程中的异常
-            # 尝试找到与此对话关联的最后一个请求的回调
+            result = await provider.async_check_conversation_status(conversation_id)
+
             if (
                 conversation_id in self._conversation_requests
                 and self._conversation_requests[conversation_id]
             ):
                 last_request_id = self._conversation_requests[conversation_id][-1]
                 callback = self._callbacks.get((conversation_id, last_request_id))
-                if callback:
-                    try:
-                        await callback.async_on_humanloop_error(provider, e)
-                    except Exception:
-                        # 如果错误回调也失败，只能忽略
-                        pass
+
+                if callback and result.status not in [HumanLoopStatus.PENDING]:
+                    # 如果有回调且状态不是等待或进行中，触发状态更新回调
+                    await self._async_trigger_update_callback(
+                        conversation_id, last_request_id, provider, result
+                    )
+
+            return result
+        except Exception as e:
+            # 处理检查对话状态过程中的异常
+            # 尝试找到与此对话关联的最后一个请求的回调
+            if callback:
+                try:
+                    await callback.async_on_humanloop_error(provider, e)
+                except Exception:
+                    # 如果错误回调也失败，只能忽略
+                    pass
             raise  # 重新抛出异常，让调用者知道发生了错误
 
     def check_conversation_status(
@@ -632,42 +629,6 @@ class DefaultHumanLoopManager(HumanLoopManager):
 
         return result
 
-    async def _async_create_timeout_task(
-        self,
-        conversation_id: str,
-        request_id: str,
-        timeout: int,
-        provider: HumanLoopProvider,
-        callback: Optional[HumanLoopCallback],
-    ) -> None:
-        """创建超时任务"""
-
-        async def timeout_task() -> None:
-            await asyncio.sleep(timeout)
-            # 检查当前状态
-            result = await self.async_check_request_status(
-                conversation_id, request_id, provider.name
-            )
-
-            # 只有当状态为PENDING时才触发超时回调
-            # INPROGRESS状态表示对话正在进行中，不应视为超时
-            if result.status == HumanLoopStatus.PENDING:
-                if callback:
-                    await callback.async_on_humanloop_timeout(
-                        provider=provider, result=result
-                    )
-            # 如果状态是INPROGRESS，重置超时任务
-            elif result.status == HumanLoopStatus.INPROGRESS:
-                # 对于进行中的对话，我们可以选择延长超时时间
-                # 这里我们简单地重新创建一个超时任务，使用相同的超时时间
-                if (conversation_id, request_id) in self._timeout_tasks:
-                    self._timeout_tasks[(conversation_id, request_id)].cancel()
-                new_task = asyncio.create_task(timeout_task())
-                self._timeout_tasks[(conversation_id, request_id)] = new_task
-
-        task = asyncio.create_task(timeout_task())
-        self._timeout_tasks[(conversation_id, request_id)] = task
-
     async def _async_wait_for_result(
         self,
         conversation_id: str,
@@ -704,6 +665,8 @@ class DefaultHumanLoopManager(HumanLoopManager):
         if callback:
             try:
                 await callback.async_on_humanloop_update(provider, result)
+                if result.status == HumanLoopStatus.EXPIRED:
+                    await callback.async_on_humanloop_timeout(provider, result)
                 # 如果状态是最终状态，可以考虑移除回调
                 if result.status not in [
                     HumanLoopStatus.PENDING,

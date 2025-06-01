@@ -1,6 +1,5 @@
 from abc import ABC
 from typing import Dict, Any, Optional, List, Tuple
-import asyncio
 import json
 import uuid
 from datetime import datetime
@@ -33,8 +32,6 @@ class BaseProvider(HumanLoopProvider, ABC):
         self._conversations: Dict[str, Dict[str, Any]] = {}
         # For quick lookup of requests in conversations
         self._conversation_requests: defaultdict[str, List[str]] = defaultdict(list)
-        # Store timeout tasks
-        self._timeout_tasks: Dict[Tuple[str, str], asyncio.Task] = {}
 
         self.prompt_template = self.config.get("prompt_template", "{context}")
 
@@ -291,11 +288,6 @@ class BaseProvider(HumanLoopProvider, ABC):
             bool: Whether cancellation was successful, True indicates success, False indicates failure
         """
 
-        # Cancel timeout task
-        if (conversation_id, request_id) in self._timeout_tasks:
-            self._timeout_tasks[(conversation_id, request_id)].cancel()
-            del self._timeout_tasks[(conversation_id, request_id)]
-
         request_key = (conversation_id, request_id)
         if request_key in self._requests:
             # Update request status to cancelled
@@ -346,11 +338,6 @@ class BaseProvider(HumanLoopProvider, ABC):
                     HumanLoopStatus.INPROGRESS,
                 ]:
                     self._requests[request_key]["status"] = HumanLoopStatus.CANCELLED
-
-                    # Cancel the timeout task for this request
-                    if request_key in self._timeout_tasks:
-                        self._timeout_tasks[request_key].cancel()
-                        del self._timeout_tasks[request_key]
             else:
                 success = False
 
@@ -481,45 +468,6 @@ class BaseProvider(HumanLoopProvider, ABC):
         )
 
         return result
-
-    async def _async_create_timeout_task(
-        self, conversation_id: str, request_id: str, timeout: int
-    ) -> None:
-        """Create timeout task
-
-        Args:
-            conversation_id: Conversation ID
-            request_id: Request ID
-            timeout: Timeout duration in seconds
-        """
-
-        async def timeout_task() -> None:
-            await asyncio.sleep(timeout)
-
-            # Check current status
-            request_info = self._get_request(conversation_id, request_id)
-            if not request_info:
-                return
-
-            current_status = request_info.get("status", HumanLoopStatus.PENDING)
-
-            # Only trigger timeout when status is PENDING
-            # INPROGRESS status means conversation is ongoing, should not be considered as timeout
-            if current_status == HumanLoopStatus.PENDING:
-                # Update request status to expired
-                request_info["status"] = HumanLoopStatus.EXPIRED
-                request_info["error"] = "Request timed out"
-            # If status is INPROGRESS, reset timeout task
-            elif current_status == HumanLoopStatus.INPROGRESS:
-                # For ongoing conversations, we can choose to extend the timeout
-                # Here we simply create a new timeout task with the same timeout duration
-                if (conversation_id, request_id) in self._timeout_tasks:
-                    self._timeout_tasks[(conversation_id, request_id)].cancel()
-                new_task = asyncio.create_task(timeout_task())
-                self._timeout_tasks[(conversation_id, request_id)] = new_task
-
-        task = asyncio.create_task(timeout_task())
-        self._timeout_tasks[(conversation_id, request_id)] = task
 
     def build_prompt(
         self,

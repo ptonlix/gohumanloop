@@ -213,6 +213,49 @@ class EmailProvider(BaseProvider):
             logger.exception(f"Unknown error occurred while sending email: {str(e)}")
             raise
 
+    async def _async_check_emails_with_timeout(
+        self,
+        conversation_id: str,
+        request_id: str,
+        recipient_email: str,
+        subject: str,
+        timeout: Optional[int],
+    ) -> None:
+        """Check email replies with timeout functionality
+
+        Args:
+            conversation_id: Conversation ID to identify a complete dialogue session
+            request_id: Request ID to identify a specific request
+            recipient_email: Recipient's email address
+            subject: Email subject line
+            timeout: Timeout duration in seconds, no timeout if None
+        """
+
+        try:
+            if timeout:
+                # 使用 wait_for 设置超时
+                await asyncio.wait_for(
+                    self._async_check_emails(
+                        conversation_id, request_id, recipient_email, subject
+                    ),
+                    timeout=timeout,
+                )
+            else:
+                # 无超时限制
+                await self._async_check_emails(
+                    conversation_id, request_id, recipient_email, subject
+                )
+
+        except asyncio.TimeoutError:
+            # 超时处理
+            request_info = self._get_request(conversation_id, request_id)
+            if request_info and request_info.get("status") == HumanLoopStatus.PENDING:
+                request_info["status"] = HumanLoopStatus.EXPIRED
+                request_info["error"] = "Request timed out"
+                logger.info(
+                    f"\nRequest {request_id} has timed out after {timeout} seconds"
+                )
+
     async def _async_check_emails(
         self, conversation_id: str, request_id: str, recipient_email: str, subject: str
     ) -> None:
@@ -487,11 +530,6 @@ class EmailProvider(BaseProvider):
                 "responded_at": datetime.now().isoformat(),
             }
         )
-
-        # 取消超时任务
-        if request_key in self._timeout_tasks:
-            self._timeout_tasks[request_key].cancel()
-            del self._timeout_tasks[request_key]
 
     def _format_email_body(
         self, body: str, loop_type: HumanLoopType, subject: str
@@ -772,11 +810,8 @@ class EmailProvider(BaseProvider):
             request_id,
             recipient_email,
             subject,
+            timeout,
         )
-
-        # 如果设置了超时，创建超时任务
-        if timeout:
-            await self._async_create_timeout_task(conversation_id, request_id, timeout)
 
         return HumanLoopResult(
             conversation_id=conversation_id,
@@ -786,7 +821,12 @@ class EmailProvider(BaseProvider):
         )
 
     def _run_email_check_task(
-        self, conversation_id: str, request_id: str, recipient_email: str, subject: str
+        self,
+        conversation_id: str,
+        request_id: str,
+        recipient_email: str,
+        subject: str,
+        timeout: Optional[int],
     ) -> None:
         """Run email check task in thread
 
@@ -803,8 +843,8 @@ class EmailProvider(BaseProvider):
         try:
             # Run email check in new event loop
             loop.run_until_complete(
-                self._async_check_emails(
-                    conversation_id, request_id, recipient_email, subject
+                self._async_check_emails_with_timeout(
+                    conversation_id, request_id, recipient_email, subject, timeout
                 )
             )
         except Exception as e:
@@ -987,11 +1027,8 @@ class EmailProvider(BaseProvider):
             request_id,
             recipient_email,
             subject,
+            timeout,
         )
-
-        # 如果设置了超时，创建超时任务
-        if timeout:
-            await self._async_create_timeout_task(conversation_id, request_id, timeout)
 
         return HumanLoopResult(
             conversation_id=conversation_id,

@@ -267,13 +267,8 @@ class APIProvider(BaseProvider):
                 conversation_id,
                 request_id,
                 platform,
+                timeout,
             )
-
-            # Create timeout task if timeout is set
-            if timeout:
-                await self._async_create_timeout_task(
-                    conversation_id, request_id, timeout
-                )
 
             return HumanLoopResult(
                 conversation_id=conversation_id,
@@ -296,7 +291,11 @@ class APIProvider(BaseProvider):
             )
 
     def _run_async_poll_request_status(
-        self, conversation_id: str, request_id: str, platform: str
+        self,
+        conversation_id: str,
+        request_id: str,
+        platform: str,
+        timeout: Optional[int],
     ) -> None:
         """Run asynchronous API interaction in a separate thread"""
         # Create new event loop
@@ -306,7 +305,9 @@ class APIProvider(BaseProvider):
         try:
             # Run interaction processing in the new event loop
             loop.run_until_complete(
-                self._async_poll_request_status(conversation_id, request_id, platform)
+                self._async_poll_request_status_with_timeout(
+                    conversation_id, request_id, platform, timeout
+                )
             )
         finally:
             loop.close()
@@ -579,13 +580,8 @@ class APIProvider(BaseProvider):
                 conversation_id,
                 request_id,
                 platform,
+                timeout,
             )
-
-            # Create timeout task if timeout is set
-            if timeout:
-                await self._async_create_timeout_task(
-                    conversation_id, request_id, timeout
-                )
 
             return HumanLoopResult(
                 conversation_id=conversation_id,
@@ -605,6 +601,47 @@ class APIProvider(BaseProvider):
                 status=HumanLoopStatus.ERROR,
                 error=str(e),
             )
+
+    async def _async_poll_request_status_with_timeout(
+        self,
+        conversation_id: str,
+        request_id: str,
+        platform: str,
+        timeout: Optional[int],
+    ) -> None:
+        """Poll request status with optional timeout
+
+        Args:
+            conversation_id: Conversation identifier
+            request_id: Request identifier
+            platform: Platform identifier
+            timeout: Optional timeout in seconds. If specified, polling will stop after timeout period
+        """
+
+        try:
+            if timeout:
+                # 使用 wait_for 设置超时
+                await asyncio.wait_for(
+                    self._async_poll_request_status(
+                        conversation_id, request_id, platform
+                    ),
+                    timeout=timeout,
+                )
+            else:
+                # 无超时限制
+                await self._async_poll_request_status(
+                    conversation_id, request_id, platform
+                )
+
+        except asyncio.TimeoutError:
+            # 超时处理
+            request_info = self._get_request(conversation_id, request_id)
+            if request_info and request_info.get("status") == HumanLoopStatus.PENDING:
+                request_info["status"] = HumanLoopStatus.EXPIRED
+                request_info["error"] = "Request timed out"
+                logger.info(
+                    f"\nRequest {request_id} has timed out after {timeout} seconds"
+                )
 
     async def _async_poll_request_status(
         self, conversation_id: str, request_id: str, platform: str

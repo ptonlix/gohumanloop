@@ -42,6 +42,7 @@ def run_async_safely(coro: Awaitable[Any]) -> Any:
     finally:
         if own_loop and not loop.is_closed():
             loop.close()
+            asyncio.set_event_loop(None)
 
 
 def get_secret_from_env(

@@ -90,17 +90,36 @@ class TerminalProvider(BaseProvider):
         self._terminal_input_tasks[
             (conversation_id, request_id)
         ] = self._executor.submit(
-            self._run_async_terminal_interaction, conversation_id, request_id
+            self._run_async_terminal_interaction, conversation_id, request_id, timeout
         )
-
-        # Create timeout task if timeout is specified
-        if timeout:
-            await self._async_create_timeout_task(conversation_id, request_id, timeout)
 
         return result
 
+    async def _process_terminal_interaction_with_timeout(
+        self, conversation_id: str, request_id: str, timeout: Optional[int]
+    ) -> None:
+        """Process terminal interaction with timeout functionality"""
+        try:
+            if timeout:
+                # Set timeout using wait_for
+                await asyncio.wait_for(
+                    self._process_terminal_interaction(conversation_id, request_id),
+                    timeout=timeout,
+                )
+            else:
+                # No timeout limit
+                await self._process_terminal_interaction(conversation_id, request_id)
+
+        except asyncio.TimeoutError:
+            # Handle timeout
+            request_info = self._get_request(conversation_id, request_id)
+            if request_info and request_info.get("status") == HumanLoopStatus.PENDING:
+                request_info["status"] = HumanLoopStatus.EXPIRED
+                request_info["error"] = "Request timed out"
+                print(f"\nRequest {request_id} has timed out after {timeout} seconds")
+
     def _run_async_terminal_interaction(
-        self, conversation_id: str, request_id: str
+        self, conversation_id: str, request_id: str, timeout: int | None
     ) -> None:
         """Run asynchronous terminal interaction in a separate thread"""
         # Create new event loop
@@ -110,7 +129,9 @@ class TerminalProvider(BaseProvider):
         try:
             # Run interaction processing in the new event loop
             loop.run_until_complete(
-                self._process_terminal_interaction(conversation_id, request_id)
+                self._process_terminal_interaction_with_timeout(
+                    conversation_id, request_id, timeout
+                )
             )
         finally:
             loop.close()
@@ -213,12 +234,8 @@ class TerminalProvider(BaseProvider):
         self._terminal_input_tasks[
             (conversation_id, request_id)
         ] = self._executor.submit(
-            self._run_async_terminal_interaction, conversation_id, request_id
+            self._run_async_terminal_interaction, conversation_id, request_id, timeout
         )
-
-        # Create timeout task if timeout is specified
-        if timeout:
-            await self._async_create_timeout_task(conversation_id, request_id, timeout)
 
         return result
 
