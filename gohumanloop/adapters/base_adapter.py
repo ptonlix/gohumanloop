@@ -436,11 +436,11 @@ class HumanloopAdapter:
 
             # First try to get node_input from kwargs using state_key
             node_input = kwargs.get(state_key)
-            
+
             # If not found in kwargs, try to get from first argument (state)
             if node_input is None and state and isinstance(state, dict):
                 node_input = state.get(state_key, {})
-            
+
             # If still not found, use empty dict as default
             if node_input is None:
                 node_input = {}
