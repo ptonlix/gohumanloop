@@ -288,8 +288,8 @@ class HumanloopAdapter:
                     "responded_at": result.responded_at,
                     "error": result.error,
                 }
-
-            kwargs[ret_key] = approval_info
+            if  ret_key in kwargs:
+                kwargs[ret_key] = approval_info
             # Check approval result
             if isinstance(result, HumanLoopResult):
                 # Handle based on approval status
