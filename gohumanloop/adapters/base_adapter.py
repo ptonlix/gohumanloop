@@ -19,7 +19,7 @@ from inspect import iscoroutinefunction
 from contextlib import asynccontextmanager, contextmanager
 import logging
 
-from gohumanloop.utils import run_async_safely
+from gohumanloop.utils import run_async_safely, generate_function_summary
 from gohumanloop.core.interface import (
     HumanLoopRequest,
     HumanLoopResult,
@@ -241,6 +241,12 @@ class HumanloopAdapter:
 
         @wraps(fn)
         async def async_wrapper(*args: Any, **kwargs: Any) -> R:
+            # Check if ret_key exists in function parameters
+            if ret_key not in fn.__code__.co_varnames:
+                raise ValueError(
+                    f"Function {fn.__name__} must have parameter named {ret_key}"
+                )
+
             # Determine if callback is instance or factory function
             cb = None
             if callable(callback) and not isinstance(callback, HumanLoopCallback):
@@ -255,7 +261,8 @@ class HumanloopAdapter:
                 conversation_id=conversation_id,
                 loop_type=HumanLoopType.APPROVAL,
                 context={
-                    "message": {
+                    "message": generate_function_summary(fn, args, kwargs),
+                    "function": {
                         "function_name": fn.__name__,
                         "function_signature": str(fn.__code__.co_varnames),
                         "arguments": str(args),
@@ -288,8 +295,10 @@ class HumanloopAdapter:
                     "responded_at": result.responded_at,
                     "error": result.error,
                 }
-            if ret_key in kwargs:
+
+                # Inject approval info into kwargs
                 kwargs[ret_key] = approval_info
+
             # Check approval result
             if isinstance(result, HumanLoopResult):
                 # Handle based on approval status
@@ -426,6 +435,12 @@ class HumanloopAdapter:
 
         @wraps(fn)
         async def async_wrapper(*args: Any, **kwargs: Any) -> R:
+            # Check if ret_key exists in function parameters
+            if ret_key not in fn.__code__.co_varnames:
+                raise ValueError(
+                    f"Function {fn.__name__} must have parameter named {ret_key}"
+                )
+
             # Determine if callback is instance or factory function
             cb = None
             state = args[0] if args else None
@@ -516,8 +531,8 @@ class HumanloopAdapter:
                     "responded_at": result.responded_at,
                     "error": result.error,
                 }
-
-            kwargs[ret_key] = conversation_info
+                # Inject conversation info into kwargs
+                kwargs[ret_key] = conversation_info
 
             if isinstance(result, HumanLoopResult):
                 if iscoroutinefunction(fn):
@@ -631,6 +646,12 @@ class HumanloopAdapter:
 
         @wraps(fn)
         async def async_wrapper(*args: Any, **kwargs: Any) -> R:
+            # Check if ret_key exists in function parameters
+            if ret_key not in fn.__code__.co_varnames:
+                raise ValueError(
+                    f"Function {fn.__name__} must have parameter named {ret_key}"
+                )
+
             # Determine if callback is an instance or factory function
             # callback: can be HumanLoopCallback instance or factory function
             # - If factory function: accepts state parameter and returns HumanLoopCallback instance
@@ -665,12 +686,11 @@ class HumanloopAdapter:
                 provider_id=provider_id,
                 blocking=True,
             )
-
-            # 初始化审批结果对象为None
+            # Initialize response info object as None
             resp_info = None
 
             if isinstance(result, HumanLoopResult):
-                # 如果结果是HumanLoopResult类型，则构建完整的审批信息
+                # If result is HumanLoopResult type, build complete response info
                 resp_info = {
                     "conversation_id": result.conversation_id,
                     "request_id": result.request_id,
@@ -682,12 +702,12 @@ class HumanloopAdapter:
                     "responded_at": result.responded_at,
                     "error": result.error,
                 }
+                # Inject approval info into kwargs
+                kwargs[ret_key] = resp_info
 
-            kwargs[ret_key] = resp_info
-
-            # 检查结果是否有效
+            # Check if result is valid
             if isinstance(result, HumanLoopResult):
-                # 返回获取信息结果，由用户去判断是否使用
+                # Return the information result, let user decide whether to use it
                 if iscoroutinefunction(fn):
                     ret = await fn(*args, **kwargs)
                 else:
@@ -701,7 +721,7 @@ class HumanloopAdapter:
             ret = run_async_safely(async_wrapper(*args, **kwargs))
             return cast(R, ret)
 
-        # 根据被装饰函数类型返回对应的wrapper
+        # Return corresponding wrapper based on decorated function type
         if iscoroutinefunction(fn):
             return async_wrapper
         return sync_wrapper
