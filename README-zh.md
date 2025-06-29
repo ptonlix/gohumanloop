@@ -185,6 +185,18 @@ python main.py
 
 ➡️ 更多示例请查看[示例仓库](https://github.com/ptonlix/gohumanloop-examples)，并期待你的分享～
 
+### Apiservices
+
+`Apiservices` 提供一系列对接`GoHumanLoop`的`APIProvider`示例服务。让`GoHumanLoop`轻松将 AI Agent 框架审批和获取信息的能力，拓展到更多第三方服务中，比`飞书`、`企业微信`和`钉钉`等常见的企业内部 OA 系统。
+
+目前支持：
+
+- Mock: 模拟 API 服务
+- 企业微信: 审批和信息获取
+- 飞书、钉钉: 正在开发，即将上线
+
+✈️ 详情见 [Apiservices](./apiservices/README.md)
+
 ## 🎵 Why GoHumanloop?
 
 ### Human-in-the-loop
@@ -245,18 +257,19 @@ python main.py
 
 ## 📅 Roadmap
 
-| Feature           | Status     |
-| ----------------- | ---------- |
-| Approval          | ⚙️ Beta    |
-| Information       | ⚙️ Beta    |
-| Conversation      | ⚙️ Beta    |
-| Email Provider    | ⚙️ Beta    |
-| Terminal Provider | ⚙️ Beta    |
-| API Provider      | ⚙️ Beta    |
-| Default Manager   | ⚙️ Beta    |
-| GLH Manager       | 🗓️ Planned |
-| Langchain Support | ⚙️ Beta    |
-| CrewAI Support    | 🗓️ Planned |
+| Feature            | Status     |
+| ------------------ | ---------- |
+| Approval           | ⚙️ Beta    |
+| Information        | ⚙️ Beta    |
+| Conversation       | ⚙️ Beta    |
+| Email Provider     | ⚙️ Beta    |
+| Terminal Provider  | ⚙️ Beta    |
+| API Provider       | ⚙️ Beta    |
+| Default Manager    | ⚙️ Beta    |
+| GLH Manager        | 🗓️ Planned |
+| Langchain Support  | ⚙️ Beta    |
+| CrewAI Support     | ⚙️ Beta    |
+| ApiServices-WeWork | ⚙️ Beta    |
 
 - 💡 GLH Manager - GoHumanLoop Manager 将对接正在打造的集成平台 GoHumanLoop Hub，为用户提供更灵活的管理方式。
 
