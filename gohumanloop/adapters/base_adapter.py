@@ -476,7 +476,8 @@ class HumanloopAdapter:
                 result = await self.manager.async_continue_humanloop(
                     conversation_id=conversation_id,
                     context={
-                        "message": {
+                        "message": generate_function_summary(fn, args, kwargs),
+                        "function": {
                             "function_name": fn.__name__,
                             "function_signature": str(fn.__code__.co_varnames),
                             "arguments": str(args),
@@ -670,7 +671,8 @@ class HumanloopAdapter:
                 conversation_id=conversation_id,
                 loop_type=HumanLoopType.INFORMATION,
                 context={
-                    "message": {
+                    "message": generate_function_summary(fn, args, kwargs),
+                    "function": {
                         "function_name": fn.__name__,
                         "function_signature": str(fn.__code__.co_varnames),
                         "arguments": str(args),
@@ -708,11 +710,17 @@ class HumanloopAdapter:
             # Check if result is valid
             if isinstance(result, HumanLoopResult):
                 # Return the information result, let user decide whether to use it
-                if iscoroutinefunction(fn):
-                    ret = await fn(*args, **kwargs)
+                # Handle based on completed status
+                if result.status == HumanLoopStatus.COMPLETED:
+                    if iscoroutinefunction(fn):
+                        ret = await fn(*args, **kwargs)
+                    else:
+                        ret = fn(*args, **kwargs)
+                    return cast(R, ret)
                 else:
-                    ret = fn(*args, **kwargs)
-                return cast(R, ret)
+                    raise ValueError(
+                        f"Function {fn.__name__} infomartion request error: {result.status}"
+                    )
             else:
                 raise ValueError(f"Info request timeout or error for {fn.__name__}")
 
