@@ -184,6 +184,19 @@ Perform `human-in-the-loop` interaction by entering:
 
 ➡️ Check out more examples in the [Examples Repository](https://github.com/ptonlix/gohumanloop-examples) and we look foward to your contributions!
 
+### Apiservices
+
+`Apiservices` provides a series of example `APIProvider` services that integrate with `GoHumanLoop`. This enables `GoHumanLoop` to easily extend AI Agent framework's approval and information gathering capabilities to more third-party services, such as common enterprise OA systems like `Feishu`, `WeWork`, and `DingTalk`.
+
+Currently supported:
+
+- Mock: Simulated API service
+- WeWork: Approval and information gathering
+- Feishu: Approval and information gathering
+- DingTalk, Personal WeChat: Under development, coming soon
+
+✈️ See [Apiservices](./apiservices/README.md) for details
+
 ## 🎵 Why GoHumanloop?
 
 ### Human-in-the-loop
@@ -244,18 +257,21 @@ Through `GoHumanloop`'s encapsulation, you can implement secure and efficient `H
 
 ## 📅 Roadmap
 
-| Feature           | Status     |
-| ----------------- | ---------- |
-| Approval          | ⚙️ Beta    |
-| Information       | ⚙️ Beta    |
-| Conversation      | ⚙️ Beta    |
-| Email Provider    | ⚙️ Beta    |
-| Terminal Provider | ⚙️ Beta    |
-| API Provider      | ⚙️ Beta    |
-| Default Manager   | ⚙️ Beta    |
-| GLH Manager       | 🗓️ Planned |
-| Langchain Support | ⚙️ Beta    |
-| CrewAI Support    | 🗓️ Planned |
+| Feature            | Status     |
+| ------------------ | ---------- |
+| Approval           | ⚙️ Beta    |
+| Information        | ⚙️ Beta    |
+| Conversation       | ⚙️ Beta    |
+| Email Provider     | ⚙️ Beta    |
+| Terminal Provider  | ⚙️ Beta    |
+| API Provider       | ⚙️ Beta    |
+| Default Manager    | ⚙️ Beta    |
+| GLH Manager        | 🗓️ Planned |
+| Langchain Support  | ⚙️ Beta    |
+| CrewAI Support     | ⚙️ Beta    |
+| MCP Support        | ⚙️ Beta    |
+| ApiServices-WeWork | ⚙️ Beta    |
+| ApiServices-FeiShu | ⚙️ Beta    |
 
 - 💡 GLH Manager - GoHumanLoop Manager will integrate with the upcoming GoHumanLoop Hub platform to provide users with more flexible management options.
 

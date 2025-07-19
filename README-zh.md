@@ -193,7 +193,8 @@ python main.py
 
 - Mock: 模拟 API 服务
 - 企业微信: 审批和信息获取
-- 飞书、钉钉: 正在开发，即将上线
+- 飞书: 审批和信息获取
+- 钉钉、个人微信: 正在开发，即将上线
 
 ✈️ 详情见 [Apiservices](./apiservices/README.md)
 
@@ -269,7 +270,9 @@ python main.py
 | GLH Manager        | 🗓️ Planned |
 | Langchain Support  | ⚙️ Beta    |
 | CrewAI Support     | ⚙️ Beta    |
+| MCP Support        | ⚙️ Beta    |
 | ApiServices-WeWork | ⚙️ Beta    |
+| ApiServices-FeiShu | ⚙️ Beta    |
 
 - 💡 GLH Manager - GoHumanLoop Manager 将对接正在打造的集成平台 GoHumanLoop Hub，为用户提供更灵活的管理方式。
 

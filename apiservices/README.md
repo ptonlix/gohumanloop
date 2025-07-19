@@ -38,3 +38,29 @@ docker run -d \
   ptonlix/gohumanloop-wework:latest
 
 ```
+
+### 3. gohumanloop-feishu 服务
+
+**仓库地址:**
+
+- [gohumanloop-feishu](https://github.com/ptonlix/gohumanloop-feishu)
+
+**快速 Docker 部署:**
+
+- 提前安装好 Docker 服务
+
+```shell
+docker pull ptonlix/gohumanloop-feishu:latest
+```
+
+- 运行容器
+
+```shell
+docker run -d \
+  --name gohumanloop-feishu \
+  -v /path/to/local/conf:/app/conf \
+  -v /path/to/local/data:/app/data \
+  -p 9800:9800 \
+  ptonlix/gohumanloop-feishu:latest
+
+```

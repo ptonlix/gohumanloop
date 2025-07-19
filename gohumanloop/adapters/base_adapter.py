@@ -241,11 +241,15 @@ class HumanloopAdapter:
 
         @wraps(fn)
         async def async_wrapper(*args: Any, **kwargs: Any) -> R:
+            # Note: ret_key parameter is optional for approval functions
+            # If ret_key is not present in the function signature,
+            # approval information will not be passed to the function
             # Check if ret_key exists in function parameters
-            if ret_key not in fn.__code__.co_varnames:
-                raise ValueError(
-                    f"Function {fn.__name__} must have parameter named {ret_key}"
-                )
+            if ret_key in fn.__code__.co_varnames:
+                # Only inject approval info if ret_key parameter exists
+                approval_info_available = True
+            else:
+                approval_info_available = False
 
             # Determine if callback is instance or factory function
             cb = None
@@ -279,25 +283,26 @@ class HumanloopAdapter:
                 blocking=True,
             )
 
-            # Initialize approval result object as None
-            approval_info = None
+            if approval_info_available:
+                # Initialize approval result object as None
+                approval_info = None
 
-            if isinstance(result, HumanLoopResult):
-                # If result is HumanLoopResult type, build complete approval info
-                approval_info = {
-                    "conversation_id": result.conversation_id,
-                    "request_id": result.request_id,
-                    "loop_type": result.loop_type,
-                    "status": result.status,
-                    "response": result.response,
-                    "feedback": result.feedback,
-                    "responded_by": result.responded_by,
-                    "responded_at": result.responded_at,
-                    "error": result.error,
-                }
+                if isinstance(result, HumanLoopResult):
+                    # If result is HumanLoopResult type, build complete approval info
+                    approval_info = {
+                        "conversation_id": result.conversation_id,
+                        "request_id": result.request_id,
+                        "loop_type": result.loop_type,
+                        "status": result.status,
+                        "response": result.response,
+                        "feedback": result.feedback,
+                        "responded_by": result.responded_by,
+                        "responded_at": result.responded_at,
+                        "error": result.error,
+                    }
 
-                # Inject approval info into kwargs
-                kwargs[ret_key] = approval_info
+                    # Inject approval info into kwargs
+                    kwargs[ret_key] = approval_info
 
             # Check approval result
             if isinstance(result, HumanLoopResult):
