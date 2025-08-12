@@ -5,7 +5,14 @@ import asyncio
 import aiohttp
 import time
 import threading
+import socket
+import platform
 from datetime import datetime
+
+try:
+    import tomli
+except ImportError:
+    tomli = None  # type: ignore
 
 from gohumanloop.core.manager import DefaultHumanLoopManager
 from gohumanloop.providers.ghl_provider import GoHumanLoopProvider
@@ -265,6 +272,13 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
                     # 添加已取消的对话
                     task_data["conversations"].append(cancelled_conv_data)
 
+            # 添加 metadata 字段
+            task_data["metadata"] = {
+                "source": f"gohumanloop-{self._get_version()}",
+                "client_ip": self._get_client_ip(),
+                "user_agent": f"{platform.system()} {platform.release()}",
+            }
+
             # 发送数据到平台
             await self._async_send_task_data_to_platform(task_data)
 
@@ -365,6 +379,13 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
                     # 添加已取消的对话
                     task_data["conversations"].append(cancelled_conv_data)
 
+            # 添加 metadata 字段
+            task_data["metadata"] = {
+                "source": f"gohumanloop-{self._get_version()}",
+                "client_ip": self._get_client_ip(),
+                "user_agent": f"{platform.system()} {platform.release()}",
+            }
+
             # 发送数据到平台
             loop.run_until_complete(self._async_send_task_data_to_platform(task_data))
             loop.close()
@@ -421,6 +442,36 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
                     print(f"HTTP 请求异常: {str(e)}")
         except Exception as e:
             print(f"发送任务数据到平台异常: {str(e)}")
+
+    def _get_client_ip(self) -> str:
+        """获取客户端IP地址"""
+        try:
+            # 创建一个UDP socket连接到外部地址来获取本地IP
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.connect(("8.8.8.8", 80))
+                return str(s.getsockname()[0])
+        except Exception:
+            return "127.0.0.1"
+
+    def _get_version(self) -> str:
+        """获取gohumanloop版本号"""
+        try:
+            from importlib.metadata import version, PackageNotFoundError
+
+            try:
+                return str(version("gohumanloop"))
+            except PackageNotFoundError:
+                if tomli is not None:
+                    root_dir = os.path.dirname(
+                        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    )
+                    pyproject_path = os.path.join(root_dir, "pyproject.toml")
+                    with open(pyproject_path, "rb") as f:
+                        pyproject_data = tomli.load(f)
+                        return str(pyproject_data["project"]["version"])
+                return "0.1.0"
+        except (ImportError, FileNotFoundError, KeyError):
+            return "0.1.0"
 
     async def async_cancel_conversation(
         self, conversation_id: str, provider_id: Optional[str] = None

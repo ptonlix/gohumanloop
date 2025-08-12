@@ -44,7 +44,7 @@ try:
             pyproject_data = tomli.load(f)
             __version__ = pyproject_data["project"]["version"]
 except (ImportError, FileNotFoundError, KeyError):
-    __version__ = "0.1.0"
+    __version__ = "0.0.13"
 
 __all__ = [
     # Core Interfaces
