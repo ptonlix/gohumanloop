@@ -653,83 +653,73 @@ class APIProvider(BaseProvider):
             request_id: Request identifier
             platform: Platform identifier
         """
-        try:
-            while True:
-                # Get request information
-                request_info = self._get_request(conversation_id, request_id)
-                if not request_info:
-                    logger.warning(
-                        f"Polling stopped: Request '{request_id}' not found in conversation '{conversation_id}'"
-                    )
-                    return
+        while True:
+            # Get request information
+            request_info = self._get_request(conversation_id, request_id)
+            if not request_info:
+                logger.warning(
+                    f"Polling stopped: Request '{request_id}' not found in conversation '{conversation_id}'"
+                )
+                return
+
+            # Stop polling if request is in final status
+            status = request_info.get("status")
+            if status not in [HumanLoopStatus.PENDING, HumanLoopStatus.INPROGRESS]:
+                return
+
+            # Send API request to get status
+            params = HumanLoopStatusParams(
+                conversation_id=conversation_id,
+                request_id=request_id,
+                platform=platform,
+            ).model_dump()
+
+            response = await self._async_make_api_request(
+                endpoint="v1/humanloop/status", method="GET", params=params
+            )
+
+            # Parse response
+            response_data = response or {}
+            status_response = HumanLoopStatusResponse(**response_data)
+
+            # Log error but continue polling if request fails
+            if not status_response.success:
+                logger.warning(f"Failed to get status: {status_response.error}")
+                await asyncio.sleep(self.poll_interval)
+                continue
+
+            # Parse status
+            try:
+                new_status = HumanLoopStatus(status_response.status)
+            except ValueError:
+                logger.warning(
+                    f"Unknown status value: {status_response.status}, using PENDING"
+                )
+                new_status = HumanLoopStatus.PENDING
+
+            # Update request information
+            request_key = (conversation_id, request_id)
+            if request_key in self._requests:
+                self._requests[request_key]["status"] = new_status
+
+                # Update response data
+                for field in [
+                    "response",
+                    "feedback",
+                    "responded_by",
+                    "responded_at",
+                    "error",
+                ]:
+                    value = getattr(status_response, field, None)
+                    if value is not None:
+                        self._requests[request_key][field] = value
 
                 # Stop polling if request is in final status
-                status = request_info.get("status")
-                if status not in [HumanLoopStatus.PENDING, HumanLoopStatus.INPROGRESS]:
+                if new_status not in [
+                    HumanLoopStatus.PENDING,
+                    HumanLoopStatus.INPROGRESS,
+                ]:
                     return
 
-                # Send API request to get status
-                params = HumanLoopStatusParams(
-                    conversation_id=conversation_id,
-                    request_id=request_id,
-                    platform=platform,
-                ).model_dump()
-
-                response = await self._async_make_api_request(
-                    endpoint="v1/humanloop/status", method="GET", params=params
-                )
-
-                # Parse response
-                response_data = response or {}
-                status_response = HumanLoopStatusResponse(**response_data)
-
-                # Log error but continue polling if request fails
-                if not status_response.success:
-                    logger.warning(f"Failed to get status: {status_response.error}")
-                    await asyncio.sleep(self.poll_interval)
-                    continue
-
-                # Parse status
-                try:
-                    new_status = HumanLoopStatus(status_response.status)
-                except ValueError:
-                    logger.warning(
-                        f"Unknown status value: {status_response.status}, using PENDING"
-                    )
-                    new_status = HumanLoopStatus.PENDING
-
-                # Update request information
-                request_key = (conversation_id, request_id)
-                if request_key in self._requests:
-                    self._requests[request_key]["status"] = new_status
-
-                    # Update response data
-                    for field in [
-                        "response",
-                        "feedback",
-                        "responded_by",
-                        "responded_at",
-                        "error",
-                    ]:
-                        value = getattr(status_response, field, None)
-                        if value is not None:
-                            self._requests[request_key][field] = value
-
-                    # Stop polling if request is in final status
-                    if new_status not in [
-                        HumanLoopStatus.PENDING,
-                        HumanLoopStatus.INPROGRESS,
-                    ]:
-                        return
-
-                # Wait for next polling interval
-                await asyncio.sleep(self.poll_interval)
-
-        except asyncio.CancelledError:
-            logger.info(
-                f"Polling task cancelled: conversation '{conversation_id}', request '{request_id}'"
-            )
-            return
-        except Exception as e:
-            logger.error(f"Polling task error: {str(e)}")
-            return
+            # Wait for next polling interval
+            await asyncio.sleep(self.poll_interval)
