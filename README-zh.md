@@ -256,6 +256,19 @@ python main.py
 - **Conversation:** 通过对话形式与人类进行多轮交互，获取更丰富的上下文信息
 - **Specific:** 针对特定 Agent 框架，提供特定的集成方式，如`LangGraph`的`interrupt`和`resume`
 
+<div align="center">
+	<img height=360 src="http://cdn.oyster-iot.cloud/202508130024371.png"><br>
+    <b face="雅黑">GoHumanLoop生态架构</b>
+</div>
+
+### 架构说明
+
+1. 基于 LangGraph、CrewAI 等 Agent 框架构建的智能体时，使用`GoHumanLoop`SDK 能更好进行人机协同，特别是在类似 Manus 长耗时场景，需要异步与 Agent 进行交互的场景，通过简单的封装即可增强人机协同能力
+2. `GoHumanLoop`内部提供 HumanLoop 任务管理器和请求处理提供者(Provider),通过 API 方式与 GoHumanLoopHub 进行交互
+3. `GoHumanLoopHub`还能与飞书、企业微信等进行集成，实现与飞书、企业微信等应用的无缝对接。需要依赖一层转换层，目前已提供对应的服务程序例子[gohumanloop-feishu](https://github.com/ptonlix/gohumanloop-feishu)和[gohumanloop-wework](https://github.com/ptonlix/gohumanloop-wework) 后续还会继续拓展其它 OA 平台，让人机协同更好的集成到业务当中
+4. 管理人员通过`GoHumanLoopHub`提供的 API 接口，Agent 进行交互，提供用户信息、反馈、审批等信息。
+5. `GoHumanLoopHub`还提供了任务数据管理功能，Agent 可以将任务数据同步到`GoHumanLoopHub`中，方便后续分析和管理。
+
 ## 📅 Roadmap
 
 | Feature            | Status     |
