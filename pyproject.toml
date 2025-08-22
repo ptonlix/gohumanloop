@@ -3,7 +3,7 @@ authors = [
     {name = "gohumanloop authors", email = "baird0917@163.com"},
 ]
 name = "gohumanloop"
-version = "0.0.13"
+version = "0.0.14"
 description = "Perfecting AI workflows with human intelligence"
 readme = "README.md"
 requires-python = ">=3.10"

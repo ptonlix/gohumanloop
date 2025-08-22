@@ -187,13 +187,14 @@ python main.py
 
 ### Apiservices
 
-`Apiservices` 提供一系列对接`GoHumanLoop`的`APIProvider`示例服务。让`GoHumanLoop`轻松将 AI Agent 框架审批和获取信息的能力，拓展到更多第三方服务中，比`飞书`、`企业微信`和`钉钉`等常见的企业内部 OA 系统。
+`Apiservices` 提供一系列对接`GoHumanLoop`的`APIProvider`示例服务。让`GoHumanLoop`轻松将 AI Agent 框架审批和获取信息的能力，拓展到`GoHumanLoophub`或更多第三方服务中，比`飞书`、`企业微信`和`钉钉`等常见的企业内部 OA 系统。
 
 目前支持：
 
 - Mock: 模拟 API 服务
 - 企业微信: 审批和信息获取
 - 飞书: 审批和信息获取
+- GoHumanLoopHub: GoHumanLoop 开源人机交互平台，支持审批、信息获取和对话等方式
 - 钉钉、个人微信: 正在开发，即将上线
 
 ✈️ 详情见 [Apiservices](./apiservices/README.md)

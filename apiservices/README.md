@@ -13,7 +13,13 @@
 
 跳转到 [mock 服务](./mock/README.md) 查看详细说明。
 
-### 2. gohumanloop-wework 服务
+### 2. GoHumanLoopHub 服务
+
+- [gohumanloophub](https://github.com/ptonlix/gohumanloophub)
+
+更多信息请前往查看
+
+### 3. gohumanloop-wework 服务
 
 **仓库地址:**
 
@@ -39,7 +45,7 @@ docker run -d \
 
 ```
 
-### 3. gohumanloop-feishu 服务
+### 4. gohumanloop-feishu 服务
 
 **仓库地址:**
 

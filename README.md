@@ -270,21 +270,21 @@ Through `GoHumanloop`'s encapsulation, you can implement secure and efficient `H
 
 ## 📅 Roadmap
 
-| Feature            | Status     |
-| ------------------ | ---------- |
-| Approval           | ⚙️ Beta    |
-| Information        | ⚙️ Beta    |
-| Conversation       | ⚙️ Beta    |
-| Email Provider     | ⚙️ Beta    |
-| Terminal Provider  | ⚙️ Beta    |
-| API Provider       | ⚙️ Beta    |
-| Default Manager    | ⚙️ Beta    |
-| GLH Manager        | 🗓️ Planned |
-| Langchain Support  | ⚙️ Beta    |
-| CrewAI Support     | ⚙️ Beta    |
-| MCP Support        | ⚙️ Beta    |
-| ApiServices-WeWork | ⚙️ Beta    |
-| ApiServices-FeiShu | ⚙️ Beta    |
+| Feature            | Status  |
+| ------------------ | ------- |
+| Approval           | ⚙️ Beta |
+| Information        | ⚙️ Beta |
+| Conversation       | ⚙️ Beta |
+| Email Provider     | ⚙️ Beta |
+| Terminal Provider  | ⚙️ Beta |
+| API Provider       | ⚙️ Beta |
+| Default Manager    | ⚙️ Beta |
+| GLH Manager        | ⚙️ Beta |
+| Langchain Support  | ⚙️ Beta |
+| CrewAI Support     | ⚙️ Beta |
+| MCP Support        | ⚙️ Beta |
+| ApiServices-WeWork | ⚙️ Beta |
+| ApiServices-FeiShu | ⚙️ Beta |
 
 - 💡 GLH Manager - GoHumanLoop Manager will integrate with the upcoming GoHumanLoop Hub platform to provide users with more flexible management options.
 
