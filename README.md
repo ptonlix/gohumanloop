@@ -24,15 +24,35 @@ Ensures responsible AI deployment by bridging autonomous agents and human judgme
 
 ## Table of contents
 
-- [Getting Started](#getting-started)
-- [Why GoHumanloop?](#why-humanlayer)
-- [Key Features](#key-features)
-- [Examples](#examples)
-- [Roadmap](#roadmap)
-- [Contributing](#contributing)
-- [License](#license)
+- [🌍 Ecosystem Architecture](#ecosystem-architecture)
+- [🚀 Getting Started](#getting-started)
+- [🎵 Why GoHumanloop?](#why-humanlayer)
+- [📚 Key Features](#key-features)
+- [📅 Roadmap](#roadmap)
+- [🤝 Contributing](#contributing)
+- [📱 Contact](#contact)
 
-## 🎹 Getting Started
+## Ecosystem Architecture
+
+<div align="center">
+	<img height=360 src="http://cdn.oyster-iot.cloud/202508130024371.png"><br>
+    <b face="Microsoft YaHei">The GoHumanLoop ecosystem architecture</b>
+</div>
+
+1. When building agents based on frameworks like LangGraph or CrewAI, using the `GoHumanLoop` SDK enables better human–AI collaboration. It is especially suited for long-running scenarios like Manus, where asynchronous interaction with agents is required, and can enhance collaboration through simple integration.
+2. Inside `GoHumanLoop`, the HumanLoop Task Manager and Request Providers interact with GoHumanLoopHub via API.
+3. `GoHumanLoopHub` can also integrate with platforms like Feishu (Lark) and WeCom (WeChat Work) through a conversion layer. Examples are provided in [gohumanloop-feishu](https://github.com/ptonlix/gohumanloop-feishu) and [gohumanloop-wework](https://github.com/ptonlix/gohumanloop-wework). More OA platform integrations will be added to embed human–AI collaboration deeper into business workflows.
+4. Administrators can use the APIs provided by `GoHumanLoopHub` to interact with agents, supplying user information, feedback, approvals, etc.
+5. `GoHumanLoopHub` also offers task data management. Agents can synchronize task data to the hub for subsequent analysis and management.
+
+### Repositories
+
+- [gohumanloop-hub](https://github.com/ptonlix/gohumanloop-hub): The official server platform for GoHumanLoop.
+- [gohumanloop-examples](https://github.com/ptonlix/gohumanloop-examples): Examples of using GoHumanLoop with different frameworks.
+- [gohumanloop-feishu](https://github.com/ptonlix/gohumanloop-feishu): The integration layer for Feishu (Lark) with GoHumanLoop.
+- [gohumanloop-wework](https://github.com/ptonlix/gohumanloop-wework): The integration layer for WeCom (WeChat Work) with GoHumanLoop.
+
+## 🚀 Getting Started
 
 To get started, check out the following example or jump straight into one of the [Examples Repo](https://github.com/ptonlix/gohumanloop-examples):
 
@@ -255,19 +275,6 @@ Through `GoHumanloop`'s encapsulation, you can implement secure and efficient `H
 - **Conversation:** Enables multi-turn interactions with humans through dialogue to acquire richer contextual information
 - **Framework-specific Integration:** Provides specialized integration methods for specific Agent frameworks, such as `interrupt` and `resume` for `LangGraph`
 
-<div align="center">
-	<img height=360 src="http://cdn.oyster-iot.cloud/202508130024371.png"><br>
-    <b face="Microsoft YaHei">The GoHumanLoop ecosystem architecture</b>
-</div>
-
-### Architecture Description
-
-1. When building agents based on frameworks like LangGraph or CrewAI, using the `GoHumanLoop` SDK enables better human–AI collaboration. It is especially suited for long-running scenarios like Manus, where asynchronous interaction with agents is required, and can enhance collaboration through simple integration.
-2. Inside `GoHumanLoop`, the HumanLoop Task Manager and Request Providers interact with GoHumanLoopHub via API.
-3. `GoHumanLoopHub` can also integrate with platforms like Feishu (Lark) and WeCom (WeChat Work) through a conversion layer. Examples are provided in [gohumanloop-feishu](https://github.com/ptonlix/gohumanloop-feishu) and [gohumanloop-wework](https://github.com/ptonlix/gohumanloop-wework). More OA platform integrations will be added to embed human–AI collaboration deeper into business workflows.
-4. Administrators can use the APIs provided by `GoHumanLoopHub` to interact with agents, supplying user information, feedback, approvals, etc.
-5. `GoHumanLoopHub` also offers task data management. Agents can synchronize task data to the hub for subsequent analysis and management.
-
 ## 📅 Roadmap
 
 | Feature            | Status  |
@@ -300,4 +307,4 @@ The GoHumanLoop SDK and documentation are open source. We welcome contributions 
 
 ## 🌟 Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=gohumanloop/gohumanloop&type=Date)](https://www.star-history.com/#gohumanloop/gohumanloop&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=ptonlix/gohumanloop&type=Date)](https://www.star-history.com/#ptonlix/gohumanloop&Date)

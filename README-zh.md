@@ -8,7 +8,7 @@
 **GoHumanLoop**: A Python library empowering AI agents to dynamically request human input (approval/feedback/conversation) at critical stages. Core features:
 
 - `Human-in-the-loop control`: Lets AI agent systems pause and escalate decisions, enhancing safety and trust.
-- `Multi-channel integration`: Supports Terminal, Email, API, and frameworks like LangGraph/CrewAI (soon).
+- `Multi-channel integration`: Supports Terminal, Email, API, and frameworks like LangGraph/CrewAI/...(soon)
 - `Flexible workflows`: Combines automated reasoning with human oversight for reliable AI operations.
 
 Ensures responsible AI deployment by bridging autonomous agents and human judgment.
@@ -24,14 +24,35 @@ Ensures responsible AI deployment by bridging autonomous agents and human judgme
 
 ## Table of contents
 
-- [Getting Started](#getting-started)
-- [Why GoHumanloop?](#why-humanlayer)
-- [Key Features](#key-features)
-- [Roadmap](#roadmap)
-- [Contributing](#contributing)
-- [License](#license)
+- [🌍 Ecosystem Architecture](#ecosystem-architecture)
+- [🚀 Getting Started](#getting-started)
+- [🎵 Why GoHumanloop?](#why-humanlayer)
+- [📚 Key Features](#key-features)
+- [📅 Roadmap](#roadmap)
+- [🤝 Contributing](#contributing)
+- [📱 Contact](#contact)
 
-## 🎹 Getting Started
+## 🌍 Ecosystem Architecture
+
+<div align="center">
+	<img height=360 src="http://cdn.oyster-iot.cloud/202508130024371.png"><br>
+    <b face="Microsoft YaHei">GoHumanLoop生态架构</b>
+</div>
+
+1. 基于 LangGraph、CrewAI 等 Agent 框架构建的智能体时，使用`GoHumanLoop`SDK 能更好进行人机协同，特别是在类似 Manus 长耗时场景，需要异步与 Agent 进行交互的场景，通过简单的封装即可增强人机协同能力
+2. `GoHumanLoop`内部提供 HumanLoop 任务管理器和请求处理提供者(Provider),通过 API 方式与 GoHumanLoopHub 进行交互
+3. `GoHumanLoopHub`还能与飞书、企业微信等进行集成，实现与飞书、企业微信等应用的无缝对接。需要依赖一层转换层，目前已提供对应的服务程序例子[gohumanloop-feishu](https://github.com/ptonlix/gohumanloop-feishu)和[gohumanloop-wework](https://github.com/ptonlix/gohumanloop-wework) 后续还会继续拓展其它 OA 平台，让人机协同更好的集成到业务当中
+4. 管理人员通过`GoHumanLoopHub`提供的 API 接口，Agent 进行交互，提供用户信息、反馈、审批等信息。
+5. `GoHumanLoopHub`还提供了任务数据管理功能，Agent 可以将任务数据同步到`GoHumanLoopHub`中，方便后续分析和管理。
+
+### 相关仓库
+
+- [gohumanloop-hub](https://github.com/ptonlix/gohumanloop-hub): GoHumanLoop 官方服务平台。
+- [gohumanloop-examples](https://github.com/ptonlix/gohumanloop-examples): 使用 GoHumanLoop 与不同框架的示例。
+- [gohumanloop-feishu](https://github.com/ptonlix/gohumanloop-feishu): 飞书与 GoHumanLoop 的集成层。
+- [gohumanloop-wework](https://github.com/ptonlix/gohumanloop-wework): 企业微信与 GoHumanLoop 的集成层。
+
+## 🚀 Getting Started
 
 快速开始，请查看以下示例或直接跳转到[示例仓库](https://github.com/ptonlix/gohumanloop-examples)中的案例：
 
@@ -192,10 +213,9 @@ python main.py
 目前支持：
 
 - Mock: 模拟 API 服务
-- 企业微信: 审批和信息获取
-- 飞书: 审批和信息获取
-- GoHumanLoopHub: GoHumanLoop 开源人机交互平台，支持审批、信息获取和对话等方式
-- 钉钉、个人微信: 正在开发，即将上线
+- WeWork: 审批和信息获取
+- Feishu: 审批和信息获取
+- DingTalk, Personal WeChat: 正在开发，即将上线
 
 ✈️ 详情见 [Apiservices](./apiservices/README.md)
 
@@ -257,36 +277,23 @@ python main.py
 - **Conversation:** 通过对话形式与人类进行多轮交互，获取更丰富的上下文信息
 - **Specific:** 针对特定 Agent 框架，提供特定的集成方式，如`LangGraph`的`interrupt`和`resume`
 
-<div align="center">
-	<img height=360 src="http://cdn.oyster-iot.cloud/202508130024371.png"><br>
-    <b face="雅黑">GoHumanLoop生态架构</b>
-</div>
-
-### 架构说明
-
-1. 基于 LangGraph、CrewAI 等 Agent 框架构建的智能体时，使用`GoHumanLoop`SDK 能更好进行人机协同，特别是在类似 Manus 长耗时场景，需要异步与 Agent 进行交互的场景，通过简单的封装即可增强人机协同能力
-2. `GoHumanLoop`内部提供 HumanLoop 任务管理器和请求处理提供者(Provider),通过 API 方式与 GoHumanLoopHub 进行交互
-3. `GoHumanLoopHub`还能与飞书、企业微信等进行集成，实现与飞书、企业微信等应用的无缝对接。需要依赖一层转换层，目前已提供对应的服务程序例子[gohumanloop-feishu](https://github.com/ptonlix/gohumanloop-feishu)和[gohumanloop-wework](https://github.com/ptonlix/gohumanloop-wework) 后续还会继续拓展其它 OA 平台，让人机协同更好的集成到业务当中
-4. 管理人员通过`GoHumanLoopHub`提供的 API 接口，Agent 进行交互，提供用户信息、反馈、审批等信息。
-5. `GoHumanLoopHub`还提供了任务数据管理功能，Agent 可以将任务数据同步到`GoHumanLoopHub`中，方便后续分析和管理。
-
 ## 📅 Roadmap
 
-| Feature            | Status     |
-| ------------------ | ---------- |
-| Approval           | ⚙️ Beta    |
-| Information        | ⚙️ Beta    |
-| Conversation       | ⚙️ Beta    |
-| Email Provider     | ⚙️ Beta    |
-| Terminal Provider  | ⚙️ Beta    |
-| API Provider       | ⚙️ Beta    |
-| Default Manager    | ⚙️ Beta    |
-| GLH Manager        | 🗓️ Planned |
-| Langchain Support  | ⚙️ Beta    |
-| CrewAI Support     | ⚙️ Beta    |
-| MCP Support        | ⚙️ Beta    |
-| ApiServices-WeWork | ⚙️ Beta    |
-| ApiServices-FeiShu | ⚙️ Beta    |
+| Feature            | Status  |
+| ------------------ | ------- |
+| Approval           | ⚙️ Beta |
+| Information        | ⚙️ Beta |
+| Conversation       | ⚙️ Beta |
+| Email Provider     | ⚙️ Beta |
+| Terminal Provider  | ⚙️ Beta |
+| API Provider       | ⚙️ Beta |
+| Default Manager    | ⚙️ Beta |
+| GLH Manager        | ⚙️ Beta |
+| Langchain Support  | ⚙️ Beta |
+| CrewAI Support     | ⚙️ Beta |
+| MCP Support        | ⚙️ Beta |
+| ApiServices-WeWork | ⚙️ Beta |
+| ApiServices-FeiShu | ⚙️ Beta |
 
 - 💡 GLH Manager - GoHumanLoop Manager 将对接正在打造的集成平台 GoHumanLoop Hub，为用户提供更灵活的管理方式。
 
@@ -302,4 +309,4 @@ GoHumanLoop SDK 和文档是开源的，我们欢迎以问题、文档和 PR 等
 
 ## 🌟 Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=gohumanloop/gohumanloop&type=Date)](https://www.star-history.com/#gohumanloop/gohumanloop&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=ptonlix/gohumanloop&type=Date)](https://www.star-history.com/#ptonlix/gohumanloop&Date)
