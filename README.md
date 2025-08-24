@@ -24,15 +24,15 @@ Ensures responsible AI deployment by bridging autonomous agents and human judgme
 
 ## Table of contents
 
-- [🌍 Ecosystem Architecture](#ecosystem-architecture)
-- [🚀 Getting Started](#getting-started)
-- [🎵 Why GoHumanloop?](#why-humanlayer)
-- [📚 Key Features](#key-features)
-- [📅 Roadmap](#roadmap)
-- [🤝 Contributing](#contributing)
-- [📱 Contact](#contact)
+- [🌍 Ecosystem Architecture](#🌍-ecosystem-architecture)
+- [🚀 Getting Started](#🚀-getting-started)
+- [🎵 Why GoHumanloop](#🎵-why-gohumanloop)
+- [📚 Key Features](#📚-key-features)
+- [📅 Roadmap](#📅-roadmap)
+- [🤝 Contributing](#🤝-contributing)
+- [📱 Contact](#📱-contact)
 
-## Ecosystem Architecture
+## 🌍 Ecosystem Architecture
 
 <div align="center">
 	<img height=360 src="http://cdn.oyster-iot.cloud/202508130024371.png"><br>
@@ -217,7 +217,7 @@ Currently supported:
 
 ✈️ See [Apiservices](./apiservices/README.md) for details
 
-## 🎵 Why GoHumanloop?
+## 🎵 Why GoHumanloop
 
 ### Human-in-the-loop
 

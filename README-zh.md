@@ -24,13 +24,13 @@ Ensures responsible AI deployment by bridging autonomous agents and human judgme
 
 ## Table of contents
 
-- [🌍 Ecosystem Architecture](#ecosystem-architecture)
-- [🚀 Getting Started](#getting-started)
-- [🎵 Why GoHumanloop?](#why-humanlayer)
-- [📚 Key Features](#key-features)
-- [📅 Roadmap](#roadmap)
-- [🤝 Contributing](#contributing)
-- [📱 Contact](#contact)
+- [🌍 Ecosystem Architecture](#🌍-ecosystem-architecture)
+- [🚀 Getting Started](#🚀-getting-started)
+- [🎵 Why GoHumanloop](#🎵-why-gohumanloop)
+- [📚 Key Features](#📚-key-features)
+- [📅 Roadmap](#📅-roadmap)
+- [🤝 Contributing](#🤝-contributing)
+- [📱 Contact](#📱-contact)
 
 ## 🌍 Ecosystem Architecture
 
@@ -219,7 +219,7 @@ python main.py
 
 ✈️ 详情见 [Apiservices](./apiservices/README.md)
 
-## 🎵 Why GoHumanloop?
+## 🎵 Why GoHumanloop
 
 ### Human-in-the-loop
 
