@@ -1,6 +1,6 @@
 <div align="center">
 
-![Wordmark Logo of HumanLayer](./docs/images/wordmark.png)
+[![Wordmark Logo of GohHumanLoop](./docs/images/wordmark.png)](https://www.gohumanloop.com)
 <b face="雅黑">Perfecting AI workflows with human intelligence</b>
 
 </div>
@@ -12,6 +12,8 @@
 - `Flexible workflows`: Combines automated reasoning with human oversight for reliable AI operations.
 
 Ensures responsible AI deployment by bridging autonomous agents and human judgment.
+
+✈️ Introduction：[https://www.gohumanloop.com](https://www.gohumanloop.com)
 
 <div align="center">
 <img alt="Repostart" src="https://img.shields.io/github/stars/ptonlix/gohumanloop"/>

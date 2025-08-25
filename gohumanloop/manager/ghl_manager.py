@@ -67,7 +67,7 @@ class GoHumanLoopManager(DefaultHumanLoopManager):
 
         # Get API base URL from environment variables (if not provided)
         api_base_url = os.environ.get(
-            "GOHUMANLOOP_API_BASE_URL", "https://www.gohumanloop.com"
+            "GOHUMANLOOP_API_BASE_URL", "https://api.gohumanloop.com/api"
         )
 
         # Validate configuration using pydantic model
